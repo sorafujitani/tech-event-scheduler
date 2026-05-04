@@ -9,6 +9,9 @@ lerna-debug.log*
 # database
 *.sqlite
 
+# claude
+.claude/plans/
+
 # package-json
 package-json.lock
 

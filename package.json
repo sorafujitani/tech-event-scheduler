@@ -1,0 +1,31 @@
+{
+  "name": "tech-event-scheduler",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.9",
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "task dev",
+    "build": "task build",
+    "lint": "task lint",
+    "fmt": "task fmt",
+    "typecheck": "task typecheck",
+    "test": "task test",
+    "ci": "task ci"
+  },
+  "devDependencies": {
+    "@hono/cli": "^0.1.10",
+    "@types/bun": "^1.3.0",
+    "@typescript/native-preview": "latest",
+    "oxlint": "^1.0.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}

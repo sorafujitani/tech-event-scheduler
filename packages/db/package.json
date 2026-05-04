@@ -1,0 +1,25 @@
+{
+  "name": "@app/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./zod": "./src/zod.ts"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "db:gen": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@app/shared": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "drizzle-zod": "^0.7.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "drizzle-kit": "^0.31.0"
+  }
+}

@@ -111,3 +111,38 @@ dist
 
 # TernJS port file
 .tern-port
+
+# turbo
+.turbo/
+
+# wrangler / Cloudflare local dev
+.wrangler/
+.dev.vars
+.dev.vars.*
+
+# direnv
+.direnv/
+
+# nix
+result
+result-*
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# IDE
+.vscode/
+.idea/
+
+# bun
+.bun/
+
+# vite
+.vite/
+
+# OS
+.DS_Store

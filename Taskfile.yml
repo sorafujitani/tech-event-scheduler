@@ -1,0 +1,86 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  dev:
+    desc: "Run web + api in parallel (local Cloudflare Workers via wrangler)"
+    deps: [dev:web, dev:api]
+
+  dev:web:
+    dir: apps/web
+    cmd: bun run dev
+
+  dev:api:
+    dir: apps/api
+    cmd: bun run dev
+
+  build:
+    desc: "Build all workspaces"
+    cmd: bun x turbo build
+
+  lint:
+    desc: "Lint via oxlint"
+    cmd: bun x oxlint .
+
+  fmt:
+    desc: "Format via oxfmt (falls back to oxlint --fix until oxfmt CLI is finalized)"
+    cmd: bun x oxlint --fix .
+
+  typecheck:
+    desc: "Typecheck all workspaces (tsgo --noEmit per package, orchestrated by turbo)"
+    cmd: bun x turbo typecheck
+
+  test:
+    desc: "Run tests via vitest"
+    cmd: bun x turbo test
+
+  db:gen:
+    desc: "Generate drizzle migrations"
+    dir: packages/db
+    cmd: bun x drizzle-kit generate
+
+  db:migrate:local:
+    desc: "Apply migrations to local D1"
+    dir: apps/api
+    cmd: bun x wrangler d1 migrations apply DB --local
+
+  db:migrate:prod:
+    desc: "Apply migrations to prod D1"
+    dir: apps/api
+    cmd: bun x wrangler d1 migrations apply DB --remote
+
+  infra:init:
+    desc: "Initialize Terraform (downloads providers). terraform is provided by mise (mise.toml)."
+    dir: infra/terraform/prod
+    cmd: terraform init
+
+  infra:plan:
+    dir: infra/terraform/prod
+    cmd: terraform plan
+
+  infra:apply:
+    dir: infra/terraform/prod
+    cmd: terraform apply
+
+  deploy:web:
+    dir: apps/web
+    cmd: bun x wrangler deploy
+
+  deploy:api:
+    desc: "Deploy api Worker (refuses while wrangler.jsonc has placeholder D1 id)"
+    dir: apps/api
+    preconditions:
+      - sh: '! grep -q "00000000-0000-0000-0000-000000000000" wrangler.jsonc'
+        msg: "apps/api/wrangler.jsonc still contains the placeholder D1 database_id. Replace it with the real id before deploy."
+    cmd: bun x wrangler deploy
+
+  ci:
+    desc: "CI entry point: lint, typecheck, test, build"
+    cmds:
+      - task: lint
+      - task: typecheck
+      - task: test
+      - task: build

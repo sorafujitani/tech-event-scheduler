@@ -1,0 +1,16 @@
+{
+  "name": "@app/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "temporal-polyfill": "^0.3.0",
+    "zod": "^4.0.0"
+  }
+}

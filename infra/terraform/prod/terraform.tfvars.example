@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+# See variables.tf for descriptions.
+
+cloudflare_account_id = "0123456789abcdef0123456789abcdef"
+domain                = "example.com"
+zone_id               = "abcdef0123456789abcdef0123456789"
+# environment       = "production"  # default; uncomment to override

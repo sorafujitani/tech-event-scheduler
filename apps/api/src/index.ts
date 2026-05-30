@@ -4,7 +4,9 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { getAuth } from "./auth";
+import { onError } from "./errors";
 import type { Bindings } from "./env";
+import { eventRoutes } from "./routes/events";
 import { healthRoutes } from "./routes/health";
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -22,9 +24,11 @@ const app = new Hono<{ Bindings: Bindings }>()
     })(c, next),
   )
   .route("/health", healthRoutes)
-  .on(["GET", "POST"], "/auth/*", (c) =>
-    getAuth(c.env).handler(c.req.raw),
-  );
+  .on(["GET", "POST"], "/auth/*", (c) => getAuth(c.env).handler(c.req.raw))
+  .route("/events", eventRoutes); // requireSession を内部適用（AuthedEnv）
+// Phase2: .route("/public", publicRoutes) / export { EventRoom }
+
+app.onError(onError);
 
 export type AppType = typeof app;
 export default app;

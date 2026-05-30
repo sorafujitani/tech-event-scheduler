@@ -12,18 +12,21 @@
     "dev": "wrangler dev --port 8788",
     "build": "wrangler deploy --dry-run --outdir=dist",
     "deploy": "wrangler deploy",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@app/db": "workspace:*",
     "@app/shared": "workspace:*",
     "@hono/zod-validator": "^0.4.0",
     "better-auth": "^1.0.0",
+    "drizzle-orm": "^0.45.0",
     "hono": "^4.6.0",
     "temporal-polyfill": "^0.3.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.8.71",
     "@cloudflare/workers-types": "^4.0.0",
     "wrangler": "^4.0.0"
   }

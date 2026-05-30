@@ -1,0 +1,78 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-ci:
+    name: lint / typecheck / test / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Nix store cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Cache turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: nix develop -c bun install --frozen-lockfile
+
+      - name: Run CI tasks (lint / typecheck / test / build)
+        run: nix develop -c task ci
+
+  terraform-validate:
+    name: terraform validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mise
+        uses: jdx/mise-action@v2
+        with:
+          version: 2026.3.13
+          install: true
+
+      - name: terraform init -backend=false
+        working-directory: infra/terraform/prod
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        working-directory: infra/terraform/prod
+        run: terraform validate
+
+      - name: terraform fmt check
+        working-directory: infra/terraform/prod
+        run: terraform fmt -check -diff

@@ -1,4 +1,5 @@
-import { ColorModeScript, UIProvider } from "@yamada-ui/react";
+import { ColorModeScript } from "@yamada-ui/react/core";
+import { UIProvider } from "@yamada-ui/react/providers/ui-provider";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createRootRoute({

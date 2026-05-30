@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Button, Heading, VStack } from "@yamada-ui/react";
+import { Button } from "@yamada-ui/react/components/button";
+import { Heading } from "@yamada-ui/react/components/heading";
+import { VStack } from "@yamada-ui/react/components/stack";
 
 export const Route = createFileRoute("/")({
   component: HomePage,

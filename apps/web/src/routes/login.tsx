@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Button, Heading, VStack } from "@yamada-ui/react";
+import { Button } from "@yamada-ui/react/components/button";
+import { Heading } from "@yamada-ui/react/components/heading";
+import { VStack } from "@yamada-ui/react/components/stack";
 import { authClient } from "../lib/auth-client";
 
 export const Route = createFileRoute("/login")({

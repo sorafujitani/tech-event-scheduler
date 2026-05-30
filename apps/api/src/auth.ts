@@ -19,6 +19,11 @@ export const getAuth = (bindings: Bindings): Auth => {
 const buildAuth = (bindings: Bindings) => {
   const env = validateEnv(bindings);
   const db = createDb(bindings.DB);
+  // Cross-subdomain cookies are needed when web and api live on different
+  // subdomains of the same registrable parent (e.g. *.workers.dev). For local
+  // dev (`COOKIE_DOMAIN=localhost`) we skip the cross-sub config and rely on
+  // the vite proxy's same-origin shape.
+  const isLocal = env.COOKIE_DOMAIN === "localhost";
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -32,12 +37,24 @@ const buildAuth = (bindings: Bindings) => {
     }),
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
-    trustedOrigins: [env.BETTER_AUTH_URL],
+    trustedOrigins: [env.BETTER_AUTH_URL, env.WEB_ORIGIN],
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
       },
     },
+    advanced: isLocal
+      ? undefined
+      : {
+          crossSubDomainCookies: {
+            enabled: true,
+            domain: env.COOKIE_DOMAIN,
+          },
+          defaultCookieAttributes: {
+            sameSite: "none",
+            secure: true,
+          },
+        },
   });
 };

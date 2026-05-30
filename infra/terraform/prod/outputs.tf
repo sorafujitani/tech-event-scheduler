@@ -9,6 +9,6 @@ output "d1_database_name" {
 }
 
 output "web_custom_domain" {
-  description = "Hostname mapped to the web Worker."
-  value       = cloudflare_workers_custom_domain.web.hostname
+  description = "Hostname mapped to the web Worker (null until attach_custom_domain = true)."
+  value       = length(cloudflare_workers_custom_domain.web) > 0 ? cloudflare_workers_custom_domain.web[0].hostname : null
 }

@@ -7,13 +7,18 @@
   "observability": {
     "enabled": true
   },
+  // Public (non-secret) env values. Secrets (GOOGLE_*, BETTER_AUTH_*) are set
+  // via `wrangler secret put` and live outside this file.
+  "vars": {
+    "WEB_ORIGIN": "https://tech-event-scheduler-web.fujitanisora0414.workers.dev",
+    "COOKIE_DOMAIN": "fujitanisora0414.workers.dev"
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "tech-event-scheduler",
-      // TODO(setup): replace placeholder UUID with the real D1 database id from Cloudflare (terraform output) before any prod deploy.
-      // The deploy:api task will refuse to deploy while this placeholder is present.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Real D1 database id (from `wrangler d1 list`, name: tech-event-scheduler).
+      "database_id": "5e99bb69-708e-4574-a25f-8ce2bada6883",
       "migrations_dir": "../../packages/db/migrations"
     }
   ]

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { EventRoom } from "./durable/event-room";
 
 export const EnvSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1),
@@ -23,6 +24,7 @@ export type Bindings = {
   WEB_ORIGIN: string;
   COOKIE_DOMAIN: string;
   DB: D1Database;
+  EVENT_ROOM: DurableObjectNamespace<EventRoom>;
 };
 
 const cache = new WeakMap<Bindings, Env>();

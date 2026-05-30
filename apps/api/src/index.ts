@@ -32,3 +32,4 @@ app.onError(onError);
 
 export type AppType = typeof app;
 export default app;
+export { EventRoom } from "./durable/event-room"; // DO クラスを main から export

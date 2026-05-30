@@ -21,5 +21,10 @@
       "database_id": "5e99bb69-708e-4574-a25f-8ce2bada6883",
       "migrations_dir": "../../packages/db/migrations"
     }
-  ]
+  ],
+  // 1イベント=1 EventRoom DO（ライブ権威）。storage は SQLite-backed。
+  "durable_objects": {
+    "bindings": [{ "name": "EVENT_ROOM", "class_name": "EventRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["EventRoom"] }]
 }

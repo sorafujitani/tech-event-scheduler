@@ -8,6 +8,8 @@ import { requireEventMember } from "../middleware/event";
 import type { AuthedEnv, MemberEnv } from "../middleware/types";
 import * as eventsRepo from "../repo/events";
 import { createEventSchema, patchEventSchema } from "../schemas/events";
+import { counterRoutes } from "./counters";
+import { liveRoutes } from "./live";
 import { memberRoutes } from "./members";
 import { scheduleRoutes } from "./schedule";
 
@@ -47,8 +49,9 @@ const eventScoped = new Hono<MemberEnv>()
   })
   .route("/", ownerScoped) // DELETE / は owner 専用
   .route("/members", memberRoutes)
-  .route("/schedule", scheduleRoutes);
-// Phase2: .route("/counters", counterRoutes) / .route("/", liveRoutes)
+  .route("/schedule", scheduleRoutes)
+  .route("/counters", counterRoutes)
+  .route("/", liveRoutes); // /live, /ws-ticket, /ws
 
 export const eventRoutes = new Hono<AuthedEnv>()
   .use(requireSession) // 既存ミドルウェア再利用

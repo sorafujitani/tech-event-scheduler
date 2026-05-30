@@ -1,11 +1,50 @@
 import type { Database } from "@app/db";
 import { scheduleItem } from "@app/db/schema";
+import type { ScheduleItemStatus } from "@app/shared";
 import { eq, sql } from "drizzle-orm";
 import type {
   CreateScheduleItemInput,
   PatchScheduleItemInput,
 } from "../schemas/schedule";
 import { newId, nowDate } from "./ids";
+
+/** DO のタイマー write-through。5 列 + status を 1 行 UPDATE（*_at_ms は number 素通し）。 */
+export interface TimerTransitionFields {
+  status: ScheduleItemStatus;
+  actualStartedAtMs: number | null;
+  accumulatedPauseMs: number;
+  pausedAtMs: number | null;
+  endedAtMs: number | null;
+  plannedDurationSec: number;
+}
+
+export async function applyTimerTransition(
+  db: Database,
+  itemId: string,
+  f: TimerTransitionFields,
+): Promise<void> {
+  await db
+    .update(scheduleItem)
+    .set({
+      status: f.status,
+      actualStartedAtMs: f.actualStartedAtMs,
+      accumulatedPauseMs: f.accumulatedPauseMs,
+      pausedAtMs: f.pausedAtMs,
+      endedAtMs: f.endedAtMs,
+      plannedDurationSec: f.plannedDurationSec,
+      updatedAt: nowDate(),
+    })
+    .where(eq(scheduleItem.id, itemId));
+}
+
+export async function getItem(db: Database, itemId: string) {
+  const rows = await db
+    .select()
+    .from(scheduleItem)
+    .where(eq(scheduleItem.id, itemId))
+    .limit(1);
+  return rows[0] ?? null;
+}
 
 export async function listItems(db: Database, eventId: string) {
   return db

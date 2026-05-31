@@ -4,6 +4,7 @@ import { Button } from "@yamada-ui/react/components/button";
 import { Heading } from "@yamada-ui/react/components/heading";
 import { HStack } from "@yamada-ui/react/components/stack";
 import type { CSSProperties, ReactNode } from "react";
+import { ConfirmUndoProvider } from "../../components/feedback/ConfirmUndo";
 import { ConnectionChip } from "../../components/shell/ConnectionChip";
 import { useEventDetail } from "../../hooks/useEventDetail";
 import { useConnectionState, usePresence } from "../../lib/live/react/hooks";
@@ -34,7 +35,8 @@ export function EventDetailTabsShell({ eventId }: { eventId: string }) {
   const presence = usePresence();
 
   return (
-    <Box minH="100dvh">
+    <ConfirmUndoProvider>
+      <Box minH="100dvh">
       <HStack
         as="header"
         px="md"
@@ -117,6 +119,7 @@ export function EventDetailTabsShell({ eventId }: { eventId: string }) {
           設定
         </Link>
       </Box>
-    </Box>
+      </Box>
+    </ConfirmUndoProvider>
   );
 }

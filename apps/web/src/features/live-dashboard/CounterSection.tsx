@@ -1,5 +1,6 @@
 import { Text } from "@yamada-ui/react/components/text";
 import { CounterControl } from "../../components/counter/CounterControl";
+import { useConfirmUndo } from "../../components/feedback/ConfirmUndo";
 import {
   useCounter,
   useOptimisticCounterValue,
@@ -27,12 +28,15 @@ function CounterSectionInner({
   const live = useCounter(counterId);
   const adjust = useAdjustCounter(eventId, counterId);
   const reset = useResetCounter(eventId, counterId);
+  const { run: confirmUndo } = useConfirmUndo();
   return (
     <CounterControl
       value={value}
       capacity={live?.capacity ?? null}
       onAdjust={(d) => adjust.mutate(d)}
-      onReset={() => reset.mutate()}
+      onReset={() =>
+        confirmUndo("入場者数をリセットしました", () => reset.mutate())
+      }
     />
   );
 }

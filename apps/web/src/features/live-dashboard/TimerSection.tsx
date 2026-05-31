@@ -1,13 +1,22 @@
+import { remainingMs } from "@app/shared";
 import { Box } from "@yamada-ui/react/components/box";
 import { Button } from "@yamada-ui/react/components/button";
 import { HStack, VStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { BigTimer } from "../../components/timer/BigTimer";
+import { useConfirmUndo } from "../../components/feedback/ConfirmUndo";
 import { useTimers } from "../../lib/live/react/hooks";
 import { useServerNow } from "../../lib/live/react/useTimerTick";
 import { useEventDetail } from "../../hooks/useEventDetail";
 import { useTimerOps } from "../../hooks/mutations/useTimerOps";
+
+function vibrate(pattern: number | number[]) {
+  const nav = navigator as Navigator & {
+    vibrate?: (p: number | number[]) => boolean;
+  };
+  if (typeof nav.vibrate === "function") nav.vibrate(pattern);
+}
 
 export function TimerSection({ eventId }: { eventId: string }) {
   const { data } = useEventDetail(eventId);
@@ -32,6 +41,25 @@ export function TimerSection({ eventId }: { eventId: string }) {
   const snap = current ? timers.get(current.id) : undefined;
   const nowMs = useServerNow(snap?.status === "running");
   const ops = useTimerOps(eventId, current?.id ?? "");
+  const { run: confirmUndo } = useConfirmUndo();
+
+  // 残り少(<60s)/超過(<0)に遷移したタイミングで振動（色は BigTimer が対応）。
+  const bucketRef = useRef<"normal" | "soon" | "overrun">("normal");
+  const remaining =
+    snap && snap.status === "running" ? remainingMs(snap, nowMs) : null;
+  useEffect(() => {
+    if (remaining == null) {
+      bucketRef.current = "normal";
+      return;
+    }
+    const bucket =
+      remaining < 0 ? "overrun" : remaining < 60_000 ? "soon" : "normal";
+    if (bucket !== bucketRef.current) {
+      if (bucket === "soon") vibrate(30);
+      else if (bucket === "overrun") vibrate([60, 40, 60]);
+      bucketRef.current = bucket;
+    }
+  }, [remaining]);
 
   if (items.length === 0) {
     return (
@@ -107,7 +135,9 @@ export function TimerSection({ eventId }: { eventId: string }) {
                 minH="tapMain"
                 px="xl"
                 disabled={pending}
-                onClick={() => ops.complete.mutate()}
+                onClick={() =>
+                  confirmUndo("「次へ」進行しました", () => ops.complete.mutate())
+                }
               >
                 次へ ▶▶
               </Button>
@@ -115,7 +145,16 @@ export function TimerSection({ eventId }: { eventId: string }) {
           </HStack>
           {status === "running" || status === "paused" ? (
             <HStack gap="sm">
-              <Button size="sm" variant="ghost" disabled={pending} onClick={() => ops.skip.mutate()}>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={pending}
+                onClick={() =>
+                  confirmUndo("セッションをスキップしました", () =>
+                    ops.skip.mutate(),
+                  )
+                }
+              >
                 スキップ
               </Button>
               <Button size="sm" variant="outline" onClick={() => ops.extend.mutate(300)}>

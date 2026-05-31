@@ -5,6 +5,7 @@ import { Input } from "@yamada-ui/react/components/input";
 import { VStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
 import { useEffect, useState } from "react";
+import { QRShare } from "../../components/share/QRShare";
 import { useUpdateEvent } from "../../hooks/mutations/useUpdateEvent";
 import { useEventDetail } from "../../hooks/useEventDetail";
 
@@ -28,10 +29,12 @@ export function SettingsPage({ eventId }: { eventId: string }) {
     });
   };
 
+  const origin = typeof location !== "undefined" ? location.origin : "";
   const publicUrl =
-    slug.trim() !== ""
-      ? `${typeof location !== "undefined" ? location.origin : ""}/e/${slug.trim()}`
-      : null;
+    slug.trim() !== "" ? `${origin}/e/${slug.trim()}` : null;
+  // QR は保存済みの publicSlug に基づく（未保存の入力中 slug ではなく）。
+  const savedSlug = data?.event.publicSlug ?? "";
+  const savedPublicUrl = savedSlug !== "" ? `${origin}/e/${savedSlug}` : null;
 
   return (
     <VStack p="md" gap="md" maxW="640px" mx="auto" align="stretch">
@@ -69,10 +72,17 @@ export function SettingsPage({ eventId }: { eventId: string }) {
           保存に失敗しました（slug 重複・権限をご確認ください）。
         </Text>
       ) : null}
-      <Box borderTopWidth="1px" pt="md">
-        <Text fontSize="sm" color="muted">
-          QR 共有・公開ページは Phase2 で追加予定です。
+      <Box borderTopWidth="1px" pt="lg">
+        <Text fontSize="sm" fontWeight="medium" mb="sm">
+          参加者向け共有
         </Text>
+        {savedPublicUrl ? (
+          <QRShare publicUrl={savedPublicUrl} />
+        ) : (
+          <Text fontSize="sm" color="muted">
+            公開URL slug を保存すると QR を共有できます（公開ページは Phase2）。
+          </Text>
+        )}
       </Box>
     </VStack>
   );

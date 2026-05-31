@@ -53,6 +53,7 @@ export const setupApiClient = (onUnauthorized: () => void): void => {
 export const api = (): ApiClient => (singletonClient ??= createApiClient());
 
 // M1: Idempotency-Key を必ず付与する write 系ヘッダ（BE の zValidator("header") に対応）。
-export const idempotencyHeader = (): { "Idempotency-Key": string } => ({
-  "Idempotency-Key": crypto.randomUUID(),
+// hono は header キーを小文字正規化するため RPC 型も "idempotency-key" で現れる。
+export const idempotencyHeader = (): { "idempotency-key": string } => ({
+  "idempotency-key": crypto.randomUUID(),
 });

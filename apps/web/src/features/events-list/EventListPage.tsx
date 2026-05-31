@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Box } from "@yamada-ui/react/components/box";
+// Link は既に import 済み（一覧アイテムを詳細へリンク）
 import { Button } from "@yamada-ui/react/components/button";
 import { Heading } from "@yamada-ui/react/components/heading";
 import { HStack, VStack } from "@yamada-ui/react/components/stack";
@@ -38,26 +39,32 @@ export function EventListPage() {
         <Text color="muted">イベントはまだありません。「新規作成」から追加してください。</Text>
       ) : (
         events.map((ev) => (
-          <Box
+          <Link
             key={ev.id}
-            borderWidth="1px"
-            rounded="md"
-            p="md"
-            w="full"
+            to="/events/$eventId"
+            params={{ eventId: ev.id }}
+            style={{ textDecoration: "none", width: "100%" }}
           >
-            <HStack justify="space-between" align="center">
-              <VStack gap="xs" align="start">
-                <Text fontWeight="bold">{ev.title}</Text>
-                <Text fontSize="sm" color="muted">
-                  {STATUS_LABEL[ev.status] ?? ev.status}・{ev.role}
+            <Box
+              borderWidth="1px"
+              rounded="md"
+              p="md"
+              w="full"
+              _hover={{ bg: ["blackAlpha.50", "whiteAlpha.50"] }}
+            >
+              <HStack justify="space-between" align="center">
+                <VStack gap="xs" align="start">
+                  <Text fontWeight="bold">{ev.title}</Text>
+                  <Text fontSize="sm" color="muted">
+                    {STATUS_LABEL[ev.status] ?? ev.status}・{ev.role}
+                  </Text>
+                </VStack>
+                <Text fontSize="sm" color="muted" aria-hidden>
+                  ▸
                 </Text>
-              </VStack>
-              {/* 詳細ページは Phase4。実装後に Link でラップする。 */}
-              <Text fontSize="sm" color="muted">
-                詳細（準備中）
-              </Text>
-            </HStack>
-          </Box>
+              </HStack>
+            </Box>
+          </Link>
         ))
       )}
     </VStack>

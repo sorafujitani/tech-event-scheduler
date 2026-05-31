@@ -14,6 +14,12 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedEventsIndexRouteImport } from './routes/_authed/events.index'
 import { Route as AuthedEventsNewRouteImport } from './routes/_authed/events.new'
+import { Route as AuthedEventsEventIdRouteImport } from './routes/_authed/events.$eventId'
+import { Route as AuthedEventsEventIdIndexRouteImport } from './routes/_authed/events.$eventId.index'
+import { Route as AuthedEventsEventIdTimetableRouteImport } from './routes/_authed/events.$eventId.timetable'
+import { Route as AuthedEventsEventIdSettingsRouteImport } from './routes/_authed/events.$eventId.settings'
+import { Route as AuthedEventsEventIdMembersRouteImport } from './routes/_authed/events.$eventId.members'
+import { Route as AuthedEventsEventIdModulesModuleTypeRouteImport } from './routes/_authed/events.$eventId.modules.$moduleType'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -39,39 +45,116 @@ const AuthedEventsNewRoute = AuthedEventsNewRouteImport.update({
   path: '/events/new',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedEventsEventIdRoute = AuthedEventsEventIdRouteImport.update({
+  id: '/events/$eventId',
+  path: '/events/$eventId',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedEventsEventIdIndexRoute =
+  AuthedEventsEventIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthedEventsEventIdRoute,
+  } as any)
+const AuthedEventsEventIdTimetableRoute =
+  AuthedEventsEventIdTimetableRouteImport.update({
+    id: '/timetable',
+    path: '/timetable',
+    getParentRoute: () => AuthedEventsEventIdRoute,
+  } as any)
+const AuthedEventsEventIdSettingsRoute =
+  AuthedEventsEventIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthedEventsEventIdRoute,
+  } as any)
+const AuthedEventsEventIdMembersRoute =
+  AuthedEventsEventIdMembersRouteImport.update({
+    id: '/members',
+    path: '/members',
+    getParentRoute: () => AuthedEventsEventIdRoute,
+  } as any)
+const AuthedEventsEventIdModulesModuleTypeRoute =
+  AuthedEventsEventIdModulesModuleTypeRouteImport.update({
+    id: '/modules/$moduleType',
+    path: '/modules/$moduleType',
+    getParentRoute: () => AuthedEventsEventIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/events/$eventId': typeof AuthedEventsEventIdRouteWithChildren
   '/events/new': typeof AuthedEventsNewRoute
   '/events/': typeof AuthedEventsIndexRoute
+  '/events/$eventId/members': typeof AuthedEventsEventIdMembersRoute
+  '/events/$eventId/settings': typeof AuthedEventsEventIdSettingsRoute
+  '/events/$eventId/timetable': typeof AuthedEventsEventIdTimetableRoute
+  '/events/$eventId/': typeof AuthedEventsEventIdIndexRoute
+  '/events/$eventId/modules/$moduleType': typeof AuthedEventsEventIdModulesModuleTypeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/events/new': typeof AuthedEventsNewRoute
   '/events': typeof AuthedEventsIndexRoute
+  '/events/$eventId/members': typeof AuthedEventsEventIdMembersRoute
+  '/events/$eventId/settings': typeof AuthedEventsEventIdSettingsRoute
+  '/events/$eventId/timetable': typeof AuthedEventsEventIdTimetableRoute
+  '/events/$eventId': typeof AuthedEventsEventIdIndexRoute
+  '/events/$eventId/modules/$moduleType': typeof AuthedEventsEventIdModulesModuleTypeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authed/events/$eventId': typeof AuthedEventsEventIdRouteWithChildren
   '/_authed/events/new': typeof AuthedEventsNewRoute
   '/_authed/events/': typeof AuthedEventsIndexRoute
+  '/_authed/events/$eventId/members': typeof AuthedEventsEventIdMembersRoute
+  '/_authed/events/$eventId/settings': typeof AuthedEventsEventIdSettingsRoute
+  '/_authed/events/$eventId/timetable': typeof AuthedEventsEventIdTimetableRoute
+  '/_authed/events/$eventId/': typeof AuthedEventsEventIdIndexRoute
+  '/_authed/events/$eventId/modules/$moduleType': typeof AuthedEventsEventIdModulesModuleTypeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/events/new' | '/events/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/events/$eventId'
+    | '/events/new'
+    | '/events/'
+    | '/events/$eventId/members'
+    | '/events/$eventId/settings'
+    | '/events/$eventId/timetable'
+    | '/events/$eventId/'
+    | '/events/$eventId/modules/$moduleType'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/events/new' | '/events'
+  to:
+    | '/'
+    | '/login'
+    | '/events/new'
+    | '/events'
+    | '/events/$eventId/members'
+    | '/events/$eventId/settings'
+    | '/events/$eventId/timetable'
+    | '/events/$eventId'
+    | '/events/$eventId/modules/$moduleType'
   id:
     | '__root__'
     | '/'
     | '/_authed'
     | '/login'
+    | '/_authed/events/$eventId'
     | '/_authed/events/new'
     | '/_authed/events/'
+    | '/_authed/events/$eventId/members'
+    | '/_authed/events/$eventId/settings'
+    | '/_authed/events/$eventId/timetable'
+    | '/_authed/events/$eventId/'
+    | '/_authed/events/$eventId/modules/$moduleType'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,15 +200,79 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedEventsNewRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/events/$eventId': {
+      id: '/_authed/events/$eventId'
+      path: '/events/$eventId'
+      fullPath: '/events/$eventId'
+      preLoaderRoute: typeof AuthedEventsEventIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/events/$eventId/': {
+      id: '/_authed/events/$eventId/'
+      path: '/'
+      fullPath: '/events/$eventId/'
+      preLoaderRoute: typeof AuthedEventsEventIdIndexRouteImport
+      parentRoute: typeof AuthedEventsEventIdRoute
+    }
+    '/_authed/events/$eventId/timetable': {
+      id: '/_authed/events/$eventId/timetable'
+      path: '/timetable'
+      fullPath: '/events/$eventId/timetable'
+      preLoaderRoute: typeof AuthedEventsEventIdTimetableRouteImport
+      parentRoute: typeof AuthedEventsEventIdRoute
+    }
+    '/_authed/events/$eventId/settings': {
+      id: '/_authed/events/$eventId/settings'
+      path: '/settings'
+      fullPath: '/events/$eventId/settings'
+      preLoaderRoute: typeof AuthedEventsEventIdSettingsRouteImport
+      parentRoute: typeof AuthedEventsEventIdRoute
+    }
+    '/_authed/events/$eventId/members': {
+      id: '/_authed/events/$eventId/members'
+      path: '/members'
+      fullPath: '/events/$eventId/members'
+      preLoaderRoute: typeof AuthedEventsEventIdMembersRouteImport
+      parentRoute: typeof AuthedEventsEventIdRoute
+    }
+    '/_authed/events/$eventId/modules/$moduleType': {
+      id: '/_authed/events/$eventId/modules/$moduleType'
+      path: '/modules/$moduleType'
+      fullPath: '/events/$eventId/modules/$moduleType'
+      preLoaderRoute: typeof AuthedEventsEventIdModulesModuleTypeRouteImport
+      parentRoute: typeof AuthedEventsEventIdRoute
+    }
   }
 }
 
+interface AuthedEventsEventIdRouteChildren {
+  AuthedEventsEventIdMembersRoute: typeof AuthedEventsEventIdMembersRoute
+  AuthedEventsEventIdSettingsRoute: typeof AuthedEventsEventIdSettingsRoute
+  AuthedEventsEventIdTimetableRoute: typeof AuthedEventsEventIdTimetableRoute
+  AuthedEventsEventIdIndexRoute: typeof AuthedEventsEventIdIndexRoute
+  AuthedEventsEventIdModulesModuleTypeRoute: typeof AuthedEventsEventIdModulesModuleTypeRoute
+}
+
+const AuthedEventsEventIdRouteChildren: AuthedEventsEventIdRouteChildren = {
+  AuthedEventsEventIdMembersRoute: AuthedEventsEventIdMembersRoute,
+  AuthedEventsEventIdSettingsRoute: AuthedEventsEventIdSettingsRoute,
+  AuthedEventsEventIdTimetableRoute: AuthedEventsEventIdTimetableRoute,
+  AuthedEventsEventIdIndexRoute: AuthedEventsEventIdIndexRoute,
+  AuthedEventsEventIdModulesModuleTypeRoute:
+    AuthedEventsEventIdModulesModuleTypeRoute,
+}
+
+const AuthedEventsEventIdRouteWithChildren =
+  AuthedEventsEventIdRoute._addFileChildren(AuthedEventsEventIdRouteChildren)
+
 interface AuthedRouteChildren {
+  AuthedEventsEventIdRoute: typeof AuthedEventsEventIdRouteWithChildren
   AuthedEventsNewRoute: typeof AuthedEventsNewRoute
   AuthedEventsIndexRoute: typeof AuthedEventsIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedEventsEventIdRoute: AuthedEventsEventIdRouteWithChildren,
   AuthedEventsNewRoute: AuthedEventsNewRoute,
   AuthedEventsIndexRoute: AuthedEventsIndexRoute,
 }

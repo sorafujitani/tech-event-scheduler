@@ -13,10 +13,13 @@ export const useCreateEvent = () => {
   return useMutation({
     mutationFn: async (input: CreateEventInput) =>
       unwrap<CreateEventRes>(await api().api.events.$post({ json: input })),
-    onSuccess: async () => {
+    onSuccess: async (res) => {
       await qc.invalidateQueries({ queryKey: qk.events() });
-      // 詳細ページは Phase4。作成後は一覧へ戻す（Phase4 で /events/:eventId へ変更）。
-      await router.navigate({ to: "/events" });
+      // 作成後は当日運営ダッシュボード（詳細）へ。
+      await router.navigate({
+        to: "/events/$eventId",
+        params: { eventId: res.eventId },
+      });
     },
   });
 };

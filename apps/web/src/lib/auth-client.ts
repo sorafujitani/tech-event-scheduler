@@ -1,16 +1,10 @@
 import { createAuthClient } from "better-auth/react";
+import { authBaseURL } from "./env";
 
-// In prod the browser must hit the api Worker on its own subdomain (CORS +
-// cross-subdomain cookies, see apps/api/src/auth.ts). In dev the vite proxy
-// forwards /api/auth/* to the local api Worker, so a relative URL is correct.
-const PROD_API_ORIGIN = "https://tech-event-scheduler-api.fujitanisora0414.workers.dev";
-
-const baseURL = import.meta.env.PROD
-  ? `${PROD_API_ORIGIN}/api/auth`
-  : "/api/auth";
-
+// origin 分岐は env.ts に集約（重複定数を排除）。dev は相対 /api/auth（vite proxy）、
+// prod は api サブドメイン直（クロスサブドメイン cookie、apps/api/src/auth.ts 参照）。
 export const authClient = createAuthClient({
-  baseURL,
+  baseURL: authBaseURL(),
   fetchOptions: {
     credentials: "include",
   },

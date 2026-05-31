@@ -1,19 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Button } from "@yamada-ui/react/components/button";
-import { Heading } from "@yamada-ui/react/components/heading";
-import { VStack } from "@yamada-ui/react/components/stack";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+// "/" は /events へ。認証は _authed ガードが /login へ振り分ける。
 export const Route = createFileRoute("/")({
-  component: HomePage,
+  beforeLoad: () => {
+    throw redirect({ to: "/events" });
+  },
 });
-
-function HomePage() {
-  return (
-    <VStack p={8} maxW="640px" mx="auto">
-      <Heading>tech-event-scheduler</Heading>
-      <Button as={Link} to="/login">
-        Sign in
-      </Button>
-    </VStack>
-  );
-}

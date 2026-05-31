@@ -5,29 +5,36 @@ import { createIsomorphicFn } from "@tanstack/react-start";
 import { RouteError } from "./components/feedback/RouteBoundaries";
 import { RouteSpinner } from "./components/feedback/Skeletons";
 import { authClient } from "./lib/auth-client";
-import { createApiClient, setupApiClient } from "./lib/api-client";
+import {
+  createApiClient,
+  createAuthFetch,
+  setupApiClient,
+} from "./lib/api-client";
 import { makeQueryClient } from "./lib/query";
 import { createSessionResolver } from "./lib/session";
 import { createSsrClientOptions } from "./lib/ssr-client";
+import type { ApiClientOptions } from "./lib/api-client";
 import type { RouterContext } from "./router-context";
 import { routeTree } from "./routeTree.gen";
 
-// SSR=service binding fetch(+Cookie 転送) / browser=オリジン直 fetch(credentials:"include")。
+// SSR=service binding/localhost fetch(+Cookie 転送) / browser=オリジン直 fetch(credentials:"include")。
 // createIsomorphicFn の .server 実装と server-only import(ssr-client→cloudflare:workers)は
 // Start の vite plugin がクライアントバンドルから除去する。
-const createEnvApiClient = createIsomorphicFn()
-  .server(() => createApiClient(createSsrClientOptions()))
-  .client(() => createApiClient());
+const resolveClientOptions = createIsomorphicFn()
+  .server((): ApiClientOptions => createSsrClientOptions())
+  .client((): ApiClientOptions => ({}));
 
 export const getRouter = () => {
-  const apiClient = createEnvApiClient();
+  const options = resolveClientOptions();
+  const apiClient = createApiClient(options);
+  const authFetch = createAuthFetch(options);
   const queryClient = makeQueryClient();
 
   const context: RouterContext = {
     apiClient,
     queryClient,
     getSession: createSessionResolver({
-      apiClient,
+      authFetch,
       ssr: Boolean(import.meta.env.SSR),
     }),
   };

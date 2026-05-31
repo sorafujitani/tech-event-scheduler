@@ -7,13 +7,13 @@ type Fetcher = (
   init?: RequestInit,
 ) => Promise<Response>;
 
-export type ApiClient = ReturnType<typeof hc<AppType>> & {
-  /** M4: RPC アクセサに無いパス(better-auth /api/auth/*)を同一 fetch 経路で叩く薄いアクセサ */
-  $fetch: Fetcher;
-};
+// 純粋な hono RPC クライアント。
+// 注意: hc は Proxy で `$<method>` プロパティを HTTP メソッドとして解釈するため、
+// このクライアントに `$fetch` 等のメソッドを生やしてはいけない（`$fetch`→method "FETCH" 扱いになる）。
+export type ApiClient = ReturnType<typeof hc<AppType>>;
 
 export type ApiClientOptions = {
-  /** SSR ローダ等が上書き（service binding）。既定はブラウザ環境。 */
+  /** SSR ローダ等が上書き（service binding / localhost）。既定はブラウザ環境。 */
   origin?: string;
   fetch?: Fetcher;
   onUnauthorized?: () => void;
@@ -30,27 +30,38 @@ const makeBrowserFetch =
     return res;
   };
 
+const resolveConfig = (options: ApiClientOptions) => ({
+  origin: options.origin ?? apiOrigin(),
+  fetch: options.fetch ?? makeBrowserFetch(options.onUnauthorized),
+});
+
 export const createApiClient = (options: ApiClientOptions = {}): ApiClient => {
-  const origin = options.origin ?? apiOrigin();
-  const customFetch = options.fetch ?? makeBrowserFetch(options.onUnauthorized);
-  const client = hc<AppType>(origin, { fetch: customFetch }) as ApiClient;
-  // SSR は origin 付き絶対 URL、browser は相対 /api/... を同じ fetch で叩く（M4）。
-  client.$fetch = (input, init) =>
-    customFetch(
+  const { origin, fetch } = resolveConfig(options);
+  return hc<AppType>(origin, { fetch });
+};
+
+/**
+ * RPC アクセサに無いパス(better-auth /api/auth/*)を同一 fetch 経路で叩く生 fetch（M4）。
+ * hc に生やすと `$fetch`→method "FETCH" 誤認になるため独立関数にする。
+ */
+export const createAuthFetch =
+  (options: ApiClientOptions = {}): Fetcher =>
+  (input, init) => {
+    const { origin, fetch } = resolveConfig(options);
+    const url =
       typeof input === "string" && input.startsWith("/")
         ? `${origin}${input}`
-        : input,
-      init,
-    );
-  return client;
-};
+        : input;
+    return fetch(url, init);
+  };
 
 // ブラウザ用シングルトン（mutation hook 専用。LiveProvider は context.apiClient を使う＝M5）。
 let singletonClient: ApiClient | null = null;
 export const setupApiClient = (onUnauthorized: () => void): void => {
   singletonClient = createApiClient({ onUnauthorized });
 };
-export const api = (): ApiClient => (singletonClient ??= createApiClient());
+export const api = (): ApiClient =>
+  (singletonClient ??= createApiClient());
 
 // M1: Idempotency-Key を必ず付与する write 系ヘッダ（BE の zValidator("header") に対応）。
 // hono は header キーを小文字正規化するため RPC 型も "idempotency-key" で現れる。

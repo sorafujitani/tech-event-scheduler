@@ -2,6 +2,8 @@ import { Button } from "@yamada-ui/react/components/button";
 import { Heading } from "@yamada-ui/react/components/heading";
 import { VStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
+import { PageContainer } from "../layout/PageContainer";
+import { Panel } from "../ui/Panel";
 
 function ErrorView(props: {
   title: string;
@@ -9,19 +11,30 @@ function ErrorView(props: {
   onRetry?: (() => void) | undefined;
 }) {
   return (
-    <VStack p="lg" gap="md" maxW="640px" mx="auto" align="center" minH="50dvh" justify="center">
-      <Heading size="md">{props.title}</Heading>
-      {props.message ? <Text color="muted">{props.message}</Text> : null}
-      {props.onRetry ? (
-        <Button colorScheme="primary" onClick={props.onRetry}>
-          再試行
-        </Button>
-      ) : null}
-    </VStack>
+    <PageContainer>
+      <VStack gap="md" align="center" minH="50dvh" justify="center">
+        <Panel variant="elevated" p="xl" maxW="420px" w="full">
+          <VStack gap="md" align="center">
+            <Heading size="lg" fontWeight="bold">
+              {props.title}
+            </Heading>
+            {props.message ? (
+              <Text color="fg.muted" textAlign="center">
+                {props.message}
+              </Text>
+            ) : null}
+            {props.onRetry ? (
+              <Button colorScheme="primary" onClick={props.onRetry}>
+                再試行
+              </Button>
+            ) : null}
+          </VStack>
+        </Panel>
+      </VStack>
+    </PageContainer>
   );
 }
 
-// route の defaultErrorComponent。401 は _authed ガードが先に弾くため主に 403/500/network。
 export function RouteError({
   error,
   reset,
@@ -38,7 +51,6 @@ export function RouteError({
   );
 }
 
-// root の errorComponent（致命的）。
 export function AppErrorBoundary({ error }: { error: Error }) {
   return (
     <ErrorView

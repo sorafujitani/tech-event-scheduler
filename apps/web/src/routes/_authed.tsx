@@ -1,5 +1,4 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { AppShell } from "../components/shell/AppShell";
 
 export const Route = createFileRoute("/_authed")({
   beforeLoad: async ({ context, location }) => {
@@ -9,9 +8,5 @@ export const Route = createFileRoute("/_authed")({
     }
     return { session }; // 子 route の context に確定 session
   },
-  component: () => (
-    <AppShell>
-      <Outlet />
-    </AppShell>
-  ),
+  component: () => <Outlet />,
 });

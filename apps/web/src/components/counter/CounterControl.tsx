@@ -1,13 +1,15 @@
-import { Button } from "@yamada-ui/react/components/button";
+import { Button, IconButton } from "@yamada-ui/react/components/button";
+import { MinusIcon, PlusIcon } from "@yamada-ui/react/components/icon";
 import { HStack, VStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
+import { Panel } from "../ui/Panel";
 
 export type CounterControlProps = {
-  value: number; // 表示値（確定 + 楽観 overlay）
+  value: number;
   capacity?: number | null;
   disabled?: boolean;
-  onAdjust: (delta: number) => void; // Idempotency-Key は呼び出し側(useAdjustCounter)で発番
-  onReset: () => void; // reset 専用 API（adjust の -value 代用禁止）
+  onAdjust: (delta: number) => void;
+  onReset: () => void;
   onHistory?: () => void;
 };
 
@@ -16,7 +18,6 @@ function vibrate(ms: number) {
   if (typeof nav.vibrate === "function") nav.vibrate(ms);
 }
 
-// ＋右 / −左（右手親指の弧）。中央 6xl mono。aria-label 必須。絶対値 PUT 禁止＝delta 送信。
 export function CounterControl({
   value,
   capacity,
@@ -30,64 +31,66 @@ export function CounterControl({
     vibrate(10);
     onAdjust(d);
   };
+  const off = disabled ?? false;
+
   return (
-    <VStack gap="sm" align="center">
-      <HStack gap="xl" align="center" justify="center">
-        <Button
-          aria-label="1人減らす"
-          rounded="full"
-          boxSize="tapCounter"
-          fontSize="2xl"
-          variant="outline"
-          disabled={disabled ?? false}
-          onClick={() => tap(-1)}
-        >
-          −
-        </Button>
-        <VStack gap={0} align="center" minW="6rem">
-          <Text
-            fontSize="6xl"
-            fontWeight="black"
-            fontFamily="mono"
-            color={over ? "timer.overrun" : "timer.normal"}
-            lineHeight="1"
-          >
-            {value}
+    <Panel variant="elevated" p="lg">
+      <VStack gap="md" align="stretch">
+        <HStack gap="md" align="center" justify="space-between">
+          <IconButton
+            aria-label="1人減らす"
+            rounded="full"
+            boxSize="tapCounter"
+            variant="outline"
+            colorScheme="gray"
+            disabled={off}
+            onClick={() => tap(-1)}
+            icon={<MinusIcon boxSize="1.25rem" />}
+          />
+          <VStack gap={0} align="center" flex={1}>
+            <Text
+              fontSize="3xl"
+              fontWeight="700"
+              fontFamily="mono"
+              color={over ? "timer.overrun" : "timer.normal"}
+              lineHeight="1"
+              letterSpacing="timer"
+            >
+              {value}
+            </Text>
+            <Text fontSize="xs" color="fg.muted">
+              入場{capacity != null ? ` · 定員 ${capacity}` : ""}
+            </Text>
+          </VStack>
+          <IconButton
+            aria-label="1人増やす"
+            rounded="full"
+            boxSize="tapCounter"
+            colorScheme="primary"
+            disabled={off}
+            onClick={() => tap(1)}
+            icon={<PlusIcon boxSize="1.25rem" />}
+          />
+        </HStack>
+        {over ? (
+          <Text color="timer.overrun" fontWeight="medium" fontSize="sm" textAlign="center">
+            定員超過
           </Text>
-          <Text fontSize="sm" color="muted">
-            入場済み{capacity != null ? ` / 定員 ${capacity}` : ""}
-          </Text>
-        </VStack>
-        <Button
-          aria-label="1人増やす"
-          rounded="full"
-          boxSize="tapCounter"
-          fontSize="2xl"
-          colorScheme="primary"
-          disabled={disabled ?? false}
-          onClick={() => tap(1)}
-        >
-          ＋
-        </Button>
-      </HStack>
-      {over ? (
-        <Text color="timer.overrun" fontWeight="bold">
-          ⚠ 定員超過
-        </Text>
-      ) : null}
-      <HStack gap="sm">
-        <Button size="sm" variant="outline" disabled={disabled ?? false} onClick={() => tap(10)}>
-          +10
-        </Button>
-        {onHistory ? (
-          <Button size="sm" variant="ghost" onClick={onHistory}>
-            履歴
-          </Button>
         ) : null}
-        <Button size="sm" variant="ghost" colorScheme="red" onClick={onReset}>
-          リセット
-        </Button>
-      </HStack>
-    </VStack>
+        <HStack gap="xs" justify="center">
+          <Button size="xs" variant="ghost" colorScheme="gray" disabled={off} onClick={() => tap(10)}>
+            +10
+          </Button>
+          {onHistory ? (
+            <Button size="xs" variant="ghost" colorScheme="gray" onClick={onHistory}>
+              履歴
+            </Button>
+          ) : null}
+          <Button size="xs" variant="ghost" colorScheme="red" onClick={onReset}>
+            リセット
+          </Button>
+        </HStack>
+      </VStack>
+    </Panel>
   );
 }

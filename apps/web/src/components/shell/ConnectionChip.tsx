@@ -1,15 +1,16 @@
+import { Box } from "@yamada-ui/react/components/box";
 import { HStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
 import type { ConnectionState } from "../../lib/live/socket";
 
 const VIEW: Record<
   ConnectionState,
-  { dot: string; label: string; color: string }
+  { label: string; dotColor: string; pulse?: boolean }
 > = {
-  connecting: { dot: "○", label: "接続中", color: "live.off" },
-  connected: { dot: "●", label: "LIVE", color: "live.on" },
-  reconnecting: { dot: "⟳", label: "再接続中", color: "live.warn" },
-  offline: { dot: "○", label: "オフライン", color: "live.off" },
+  connecting: { label: "接続中", dotColor: "live.off" },
+  connected: { label: "Live", dotColor: "live.on", pulse: true },
+  reconnecting: { label: "再接続", dotColor: "live.warn", pulse: true },
+  offline: { label: "Offline", dotColor: "live.off" },
 };
 
 export type ConnectionChipProps = {
@@ -17,22 +18,22 @@ export type ConnectionChipProps = {
   presenceCount?: number;
 };
 
-// 色+アイコン+テキスト併記（色のみ非依存）。aria-live="polite"。
 export function ConnectionChip({ state, presenceCount }: ConnectionChipProps) {
   const v = VIEW[state];
+
   return (
-    <HStack gap="xs" aria-live="polite">
-      <Text color={v.color} fontWeight="bold" aria-hidden>
-        {v.dot}
-      </Text>
-      <Text fontSize="sm" fontWeight="medium">
+    <HStack gap="xs" align="center" aria-live="polite" flexShrink={0}>
+      <Box
+        boxSize="0.4375rem"
+        rounded="full"
+        bg={v.dotColor}
+        className={v.pulse ? "live-pulse" : undefined}
+        aria-hidden
+      />
+      <Text fontSize="xs" fontWeight="medium" color="fg.muted" whiteSpace="nowrap">
         {v.label}
+        {presenceCount != null && presenceCount > 0 ? ` · ${presenceCount}` : ""}
       </Text>
-      {presenceCount != null && presenceCount > 0 ? (
-        <Text fontSize="sm" color="muted">
-          · {presenceCount}人
-        </Text>
-      ) : null}
     </HStack>
   );
 }

@@ -21,6 +21,7 @@ import {
 import {
   counterMessage,
   presenceMessage,
+  scheduleMessage,
   snapshotMessage,
   timerMessage,
   toTimerSnapshot,
@@ -152,6 +153,61 @@ export class EventRoom extends DurableObject<Bindings> {
     await this.reconcileAlarm();
   }
 
+  // sync.schedule: D1 の schedule 定義（追加/削除/plannedDurationSec 等）を在メモリへ反映する。
+  // 実行状態（status/actualStartedAtMs/...）は在メモリが権威なので既存 entry は上書きしない。
+  private async resyncSchedule(): Promise<RoomResponse> {
+    if (this.eventId) {
+      const rows = await listItems(createDb(this.env.DB), this.eventId);
+      const seen = new Set(rows.map((r) => r.id));
+      await Promise.all(
+        rows.map((row) => {
+          const cur = this.timers.get(row.id);
+          const next: RoomTimer = cur
+            ? {
+                ...cur,
+                plannedDurationSec: row.plannedDurationSec,
+                track: row.track,
+              }
+            : // hydrate と同じ根拠: D1 は write-through で 5 列の不変条件を維持している。
+              ({
+                id: row.id,
+                plannedDurationSec: row.plannedDurationSec,
+                track: row.track,
+                overrunNotified: false,
+                status: row.status,
+                actualStartedAtMs: row.actualStartedAtMs,
+                accumulatedPauseMs: row.accumulatedPauseMs,
+                pausedAtMs: row.pausedAtMs,
+                endedAtMs: row.endedAtMs,
+              } as RoomTimer);
+          this.timers.set(next.id, next);
+          return this.ctx.storage.put(`timer:${next.id}`, next);
+        }),
+      );
+      const removed = [...this.timers.keys()].filter((id) => !seen.has(id));
+      await Promise.all(
+        removed.map((id) => {
+          this.timers.delete(id);
+          return this.ctx.storage.delete(`timer:${id}`);
+        }),
+      );
+      this.version++;
+      await this.persistVersion();
+      // broadcast は D1 の orderIndex 順（rows 順）で並べる。
+      this.broadcast(
+        scheduleMessage(
+          this.version,
+          rows.flatMap((row) => {
+            const t = this.timers.get(row.id);
+            return t ? [toTimerSnapshot(t)] : [];
+          }),
+        ),
+      );
+      await this.reconcileAlarm();
+    }
+    return this.snapshotResult();
+  }
+
   private async confirmEventId(id: string): Promise<void> {
     if (this.eventId === id) return;
     this.eventId = id;
@@ -205,8 +261,11 @@ export class EventRoom extends DurableObject<Bindings> {
         case "counter.adjust":
         case "counter.reset":
           return await this.serialize(() => this.applyCounter(cmd));
-        case "snapshot.get":
         case "sync.schedule":
+          // D1 の schedule 変更（追加/削除/定義変更）を在メモリへ追従させる。
+          // hydrate は初回起動のみなので、起動後の REST mutation はこれで届く。
+          return await this.serialize(() => this.resyncSchedule());
+        case "snapshot.get":
         case "sync.counters":
           return this.snapshotResult();
       }
@@ -355,7 +414,7 @@ export class EventRoom extends DurableObject<Bindings> {
     this.ctx.acceptWebSocket(server, [`user:${meta.userId}`]);
     server.serializeAttachment(meta);
     server.send(JSON.stringify(this.buildSnapshot()));
-    this.broadcastPresence();
+    await this.broadcastPresence();
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -391,7 +450,9 @@ export class EventRoom extends DurableObject<Bindings> {
     // WS 経由の状態変更は許さない。ping / resync のみ。
     const text = typeof message === "string" ? message : "";
     if (text === "ping") {
-      ws.send(JSON.stringify({ kind: "pong" }));
+      // app層 heartbeat はテキスト "ping"/"pong"（frontend-design §M6 契約。
+      // FE socket.ts は raw "pong" のみ notePong する — JSON だと pong-timeout で切断）。
+      ws.send("pong");
     } else if (text === "resync") {
       ws.send(JSON.stringify(this.buildSnapshot()));
     }
@@ -403,11 +464,11 @@ export class EventRoom extends DurableObject<Bindings> {
     } catch {
       /* already closing */
     }
-    this.broadcastPresence();
+    await this.broadcastPresence(ws);
   }
 
   override async webSocketError(): Promise<void> {
-    this.broadcastPresence();
+    await this.broadcastPresence();
   }
 
   // --- broadcast / snapshot ---
@@ -417,10 +478,16 @@ export class EventRoom extends DurableObject<Bindings> {
       if (ws.readyState === WebSocket.OPEN) ws.send(json);
     }
   }
-  private broadcastPresence(): void {
-    this.broadcast(
-      presenceMessage(this.version, this.ctx.getWebSockets().length),
-    );
+  // FE store は「差分 version は cur+1 厳守、<=cur は冪等無視」のため、presence も
+  // version を bump して送る（bump しないと既接続クライアントが presence 差分を常に破棄する）。
+  // webSocketClose 時点の getWebSockets() は閉じたソケットを含み得るため exclude で除外する。
+  private async broadcastPresence(exclude?: WebSocket): Promise<void> {
+    this.version++;
+    await this.persistVersion();
+    const count = this.ctx
+      .getWebSockets()
+      .filter((ws) => ws !== exclude).length;
+    this.broadcast(presenceMessage(this.version, count));
   }
   private stateView(): RoomStateView {
     return {

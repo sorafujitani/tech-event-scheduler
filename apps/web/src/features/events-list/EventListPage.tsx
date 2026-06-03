@@ -1,11 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Box } from "@yamada-ui/react/components/box";
-// Link は既に import 済み（一覧アイテムを詳細へリンク）
+import { Badge } from "@yamada-ui/react/components/badge";
 import { Button } from "@yamada-ui/react/components/button";
-import { Heading } from "@yamada-ui/react/components/heading";
+import { ChevronRightIcon } from "@yamada-ui/react/components/icon";
 import { HStack, VStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
+import { PageContainer } from "../../components/layout/PageContainer";
+import { AppShell } from "../../components/shell/AppShell";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { Panel } from "../../components/ui/Panel";
 import { api } from "../../lib/api-client";
 import { unwrap } from "../../lib/api-error";
 import type { EventList } from "../../lib/api-types";
@@ -19,6 +23,14 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "アーカイブ",
 };
 
+const STATUS_COLOR: Record<string, "gray" | "blue" | "green" | "orange" | "red"> = {
+  draft: "gray",
+  published: "blue",
+  live: "green",
+  ended: "orange",
+  archived: "gray",
+};
+
 export function EventListPage() {
   const { data } = useQuery({
     queryKey: qk.events(),
@@ -27,46 +39,66 @@ export function EventListPage() {
   const events = data ?? [];
 
   return (
-    <VStack p="md" gap="md" maxW="640px" mx="auto">
-      <HStack justify="space-between" align="center">
-        <Heading size="lg">管理イベント</Heading>
-        <Button as={Link} {...{ to: "/events/new" }} colorScheme="primary" size="sm">
-          新規作成
-        </Button>
-      </HStack>
+    <AppShell>
+      <PageContainer>
+      <VStack gap="lg" align="stretch">
+        <PageHeader
+          title="管理イベント"
+          description="担当イベントの進行管理・設定を行います。"
+          actions={
+            <Button as={Link} {...{ to: "/events/new" }} colorScheme="primary" size="sm" rounded="lg">
+              新規作成
+            </Button>
+          }
+        />
 
-      {events.length === 0 ? (
-        <Text color="muted">イベントはまだありません。「新規作成」から追加してください。</Text>
-      ) : (
-        events.map((ev) => (
-          <Link
-            key={ev.id}
-            to="/events/$eventId"
-            params={{ eventId: ev.id }}
-            style={{ textDecoration: "none", width: "100%" }}
-          >
-            <Box
-              borderWidth="1px"
-              rounded="md"
-              p="md"
-              w="full"
-              _hover={{ bg: ["blackAlpha.50", "whiteAlpha.50"] }}
-            >
-              <HStack justify="space-between" align="center">
-                <VStack gap="xs" align="start">
-                  <Text fontWeight="bold">{ev.title}</Text>
-                  <Text fontSize="sm" color="muted">
-                    {STATUS_LABEL[ev.status] ?? ev.status}・{ev.role}
-                  </Text>
-                </VStack>
-                <Text fontSize="sm" color="muted" aria-hidden>
-                  ▸
-                </Text>
-              </HStack>
-            </Box>
-          </Link>
-        ))
-      )}
-    </VStack>
+        {events.length === 0 ? (
+          <EmptyState
+            title="イベントがありません"
+            description="最初のイベントを作成して、進行表や Live 運営を始めましょう。"
+            action={
+              <Button as={Link} {...{ to: "/events/new" }} colorScheme="primary" size="sm" rounded="lg">
+                新規作成
+              </Button>
+            }
+          />
+        ) : (
+          <VStack gap="sm" align="stretch">
+            {events.map((ev) => (
+              <Link
+                key={ev.id}
+                to="/events/$eventId"
+                params={{ eventId: ev.id }}
+                style={{ textDecoration: "none", color: "inherit" }}
+              >
+                <Panel variant="interactive" p="md" w="full" rounded="lg">
+                  <HStack justify="space-between" align="center" gap="md">
+                    <VStack gap="xs" align="start" minW={0}>
+                      <Text fontWeight="semibold" truncated letterSpacing="tight">
+                        {ev.title}
+                      </Text>
+                      <HStack gap="xs" wrap="wrap">
+                        <Badge
+                          size="sm"
+                          variant="subtle"
+                          colorScheme={STATUS_COLOR[ev.status] ?? "gray"}
+                        >
+                          {STATUS_LABEL[ev.status] ?? ev.status}
+                        </Badge>
+                        <Text fontSize="sm" color="fg.muted">
+                          {ev.role}
+                        </Text>
+                      </HStack>
+                    </VStack>
+                    <ChevronRightIcon boxSize="1rem" color="fg.muted" aria-hidden />
+                  </HStack>
+                </Panel>
+              </Link>
+            ))}
+          </VStack>
+        )}
+      </VStack>
+      </PageContainer>
+    </AppShell>
   );
 }

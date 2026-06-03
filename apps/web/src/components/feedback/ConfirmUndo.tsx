@@ -9,11 +9,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { Panel } from "../ui/Panel";
 
 const UNDO_MS = 5000;
 
 interface ConfirmUndoValue {
-  /** label を 5 秒 Undo 付きで表示し、未取り消しなら action を実行する（破壊的操作の遅延実行）。 */
   run: (label: string, action: () => void) => void;
 }
 const Ctx = createContext<ConfirmUndoValue | null>(null);
@@ -29,24 +29,20 @@ export function ConfirmUndoProvider({ children }: { children: ReactNode }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const action = useRef<(() => void) | null>(null);
 
-  const run = useCallback(
-    (nextLabel: string, nextAction: () => void) => {
-      // 連続操作: 前の保留を先に確定してから新規を予約。
-      if (timer.current) {
-        clearTimeout(timer.current);
-        action.current?.();
-      }
-      action.current = nextAction;
-      setLabel(nextLabel);
-      timer.current = setTimeout(() => {
-        action.current?.();
-        action.current = null;
-        timer.current = null;
-        setLabel(null);
-      }, UNDO_MS);
-    },
-    [],
-  );
+  const run = useCallback((nextLabel: string, nextAction: () => void) => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      action.current?.();
+    }
+    action.current = nextAction;
+    setLabel(nextLabel);
+    timer.current = setTimeout(() => {
+      action.current?.();
+      action.current = null;
+      timer.current = null;
+      setLabel(null);
+    }, UNDO_MS);
+  }, []);
 
   const undo = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -59,27 +55,27 @@ export function ConfirmUndoProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{ run }}>
       {children}
       {label != null ? (
-        <HStack
+        <Panel
+          as="div"
           role="status"
           aria-live="polite"
+          variant="elevated"
           position="fixed"
           left="50%"
           transform="translateX(-50%)"
           bottom="calc(80px + env(safe-area-inset-bottom))"
           zIndex={50}
-          bg={["blackAlpha.800", "whiteAlpha.800"]}
-          color={["white", "black"]}
-          rounded="full"
-          px="lg"
+          px="md"
           py="sm"
-          gap="md"
-          boxShadow="lg"
+          maxW="calc(100vw - 2rem)"
         >
-          <Text fontSize="sm">{label}</Text>
-          <Button size="sm" variant="ghost" colorScheme="primary" onClick={undo}>
-            取り消す
-          </Button>
-        </HStack>
+          <HStack gap="md" align="center">
+            <Text fontSize="sm">{label}</Text>
+            <Button size="sm" variant="subtle" colorScheme="primary" onClick={undo}>
+              取り消す
+            </Button>
+          </HStack>
+        </Panel>
       ) : null}
     </Ctx.Provider>
   );

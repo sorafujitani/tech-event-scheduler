@@ -12,7 +12,7 @@ export function CounterSection({ eventId }: { eventId: string }) {
   const { data } = useEventDetail(eventId);
   const counter = data?.counters?.[0]; // MVP は既定の main カウンタ
   if (!counter) {
-    return <Text color="muted">カウンタが設定されていません。</Text>;
+    return <Text color="fg.muted">カウンタが設定されていません。</Text>;
   }
   return <CounterSectionInner eventId={eventId} counterId={counter.id} />;
 }

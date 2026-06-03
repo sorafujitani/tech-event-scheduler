@@ -1,9 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Box } from "@yamada-ui/react/components/box";
 import { Button } from "@yamada-ui/react/components/button";
 import { Heading } from "@yamada-ui/react/components/heading";
-import { VStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
+import { VStack } from "@yamada-ui/react/components/stack";
 import { z } from "zod";
+import { AppLogo } from "../components/ui/AppLogo";
+import { Panel } from "../components/ui/Panel";
+import { ColorModeToggle } from "../components/shell/ColorModeToggle";
+import { ShellHeader } from "../components/shell/ShellHeader";
 import { authClient } from "../lib/auth-client";
 
 export const Route = createFileRoute("/login")({
@@ -13,25 +18,46 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const { redirect } = Route.useSearch();
+
   return (
-    <VStack p="xl" align="center" maxW="360px" mx="auto" gap="lg" minH="80dvh" justify="center">
-      <Heading size="lg">tech-event-scheduler</Heading>
-      <Text color="muted" textAlign="center">
-        イベント当日運営ツール
-      </Text>
-      <Button
-        colorScheme="primary"
-        size="lg"
-        w="full"
-        onClick={() =>
-          authClient.signIn.social({
-            provider: "google",
-            callbackURL: redirect ?? "/",
-          })
-        }
+    <Box minH="100dvh" bg="bg.base">
+      <ShellHeader start={<AppLogo />} end={<ColorModeToggle />} />
+      <VStack
+        align="center"
+        maxW="400px"
+        mx="auto"
+        gap="xl"
+        minH="calc(100dvh - 3.5rem)"
+        justify="center"
+        px="md"
+        py="2xl"
       >
-        Google でサインイン
-      </Button>
-    </VStack>
+        <VStack gap="sm" align="center" textAlign="center">
+          <Heading size="2xl" fontWeight="bold" letterSpacing="tight">
+            サインイン
+          </Heading>
+          <Text color="fg.muted" fontSize="sm" lineHeight="tall">
+            テックイベントの進行管理・Live 運営
+          </Text>
+        </VStack>
+
+        <Panel variant="elevated" p="xl" w="full">
+          <Button
+            colorScheme="primary"
+            size="lg"
+            w="full"
+            minH="tapMain"
+            onClick={() =>
+              authClient.signIn.social({
+                provider: "google",
+                callbackURL: redirect ?? "/",
+              })
+            }
+          >
+            Google でサインイン
+          </Button>
+        </Panel>
+      </VStack>
+    </Box>
   );
 }

@@ -16,13 +16,17 @@ export const authBaseURL = (): string => {
 };
 
 /**
- * C1/§3.5: WS は service binding を通せない。prod=api オリジン直 / dev=同一オリジン(vite proxy)。
+ * C1/§3.5: WS は service binding を通せない。prod=api オリジン直 / dev=api Worker(:8788) 直結。
+ * dev を vite proxy 経由にできない理由: @cloudflare/vite-plugin が全 upgrade を SSR worker へ
+ * dispatch し、worker が WS を返さないため socket.destroy() され proxy トンネルが約40msで
+ * 1006 切断される（vite proxy の ws:true と非互換）。localhost cookie はポート非依存なので
+ * :8788 直結でも session cookie 認証は成立する。
  * ticket は query param ?ticket= で渡す（BE は元 URL の search を保持して DO へ転送する）。
  */
 export const eventWsUrl = (eventId: string, ticket?: string): string => {
   const base = import.meta.env.PROD
     ? PROD_API_ORIGIN.replace(/^http/, "ws")
-    : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
+    : "ws://localhost:8788";
   const q = ticket ? `?ticket=${encodeURIComponent(ticket)}` : "";
   return `${base}/api/events/${encodeURIComponent(eventId)}/ws${q}`;
 };

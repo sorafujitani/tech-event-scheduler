@@ -10,6 +10,7 @@ import { UIProvider } from "@yamada-ui/react/providers/ui-provider";
 import type { ComponentProps } from "react";
 import { AppErrorBoundary } from "../components/feedback/RouteBoundaries";
 import { NotFound } from "../components/feedback/NotFound";
+import { fontUrl } from "../lib/palette";
 import { config, theme } from "../lib/theme";
 import type { RouterContext } from "../router-context";
 
@@ -23,7 +24,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         content:
           "width=device-width, initial-scale=1.0, viewport-fit=cover",
       },
-      { title: "tech-event-scheduler" },
+      { title: "Event Scheduler" },
+    ],
+    links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      { rel: "stylesheet", href: fontUrl },
     ],
   }),
   component: RootComponent,

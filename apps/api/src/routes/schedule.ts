@@ -3,6 +3,7 @@ import { serializeRow } from "@app/shared";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { DomainError } from "../errors";
+import { callRoom } from "../lib/do";
 import { requireEventMember } from "../middleware/event";
 import type { MemberEnv } from "../middleware/types";
 import * as scheduleRepo from "../repo/schedule";
@@ -12,6 +13,12 @@ import {
   reorderSchema,
 } from "../schemas/schedule";
 import { timerRoutes } from "./timers";
+
+// D1 の schedule mutation を EventRoom DO の在メモリ状態へ追従させる。
+// DO の hydrate は初回起動のみのため、これが無いと起動後に追加した項目の
+// timer 操作が DO 側 NOT_FOUND になる。
+const syncRoom = (c: { env: MemberEnv["Bindings"] }, eventId: string) =>
+  callRoom(c.env, eventId, { type: "sync.schedule" });
 
 export const scheduleRoutes = new Hono<MemberEnv>()
   .use(requireEventMember("manager"))
@@ -27,6 +34,7 @@ export const scheduleRoutes = new Hono<MemberEnv>()
       c.req.param("eventId")!,
       c.req.valid("json"),
     );
+    await syncRoom(c, c.req.param("eventId")!);
     return c.json(serializeRow(item), 201);
   })
   .post("/reorder", zValidator("json", reorderSchema), async (c) => {
@@ -36,6 +44,7 @@ export const scheduleRoutes = new Hono<MemberEnv>()
       c.req.param("eventId")!,
       c.req.valid("json").orderedItemIds,
     );
+    await syncRoom(c, c.req.param("eventId")!);
     return c.json(rows.map(serializeRow));
   })
   .patch("/:itemId", zValidator("json", patchScheduleItemSchema), async (c) => {
@@ -46,6 +55,7 @@ export const scheduleRoutes = new Hono<MemberEnv>()
       c.req.valid("json"),
     );
     if (!item) throw new DomainError("NOT_FOUND", "schedule item not found");
+    await syncRoom(c, c.req.param("eventId")!);
     return c.json(serializeRow(item));
   })
   .delete("/:itemId", async (c) => {
@@ -57,6 +67,7 @@ export const scheduleRoutes = new Hono<MemberEnv>()
       throw new DomainError("CONFLICT", "cannot delete an active item");
     }
     await scheduleRepo.deleteItem(db, c.req.param("itemId")!);
+    await syncRoom(c, c.req.param("eventId")!);
     return c.json({ ok: true } as const);
   })
   // /schedule/:itemId/timer/{start,...} を実現（C2）

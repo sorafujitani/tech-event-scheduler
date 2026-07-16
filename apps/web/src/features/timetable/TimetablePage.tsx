@@ -1,3 +1,4 @@
+import type { ScheduleItemKind } from "@app/shared";
 import { Button } from "@yamada-ui/react/components/button";
 import { Input } from "@yamada-ui/react/components/input";
 import { HStack, VStack } from "@yamada-ui/react/components/stack";
@@ -11,7 +12,7 @@ import { Panel } from "../../components/ui/Panel";
 import { useSchedule } from "../../hooks/mutations/useSchedule";
 import { useEventDetail } from "../../hooks/useEventDetail";
 
-const KIND_LABEL: Record<string, string> = {
+const KIND_LABEL: Record<ScheduleItemKind, string> = {
   session: "セッション",
   break: "休憩",
   other: "その他",
@@ -57,7 +58,7 @@ export function TimetablePage({ eventId }: { eventId: string }) {
                     <Text fontWeight="medium">{it.title}</Text>
                     <Text fontSize="sm" color="fg.muted">
                       {Math.round(it.plannedDurationSec / 60)}分 ·{" "}
-                      {KIND_LABEL[it.kind] ?? it.kind} · {it.status}
+                      {KIND_LABEL[it.kind]} · {it.status}
                     </Text>
                   </VStack>
                   <Button

@@ -1,6 +1,7 @@
 import type { ErrorBody, ErrorCode } from "@app/shared";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { log } from "../lib/log";
 
 // HTTP status は ErrorCode から一意に決まる（DO 側 §5.9 でも再利用）。
 const STATUS: Record<ErrorCode, 400 | 401 | 403 | 404 | 409 | 500> = {
@@ -47,16 +48,8 @@ export const onError = (err: Error, c: Context): Response => {
               : "INTERNAL";
     return c.json({ error: err.message, code } satisfies ErrorBody, err.status);
   }
-  // 未捕捉エラーの最終フォールバック観測（Phase2 で lib/log.ts に集約予定）
-  // oxlint-disable-next-line no-console
-  console.error(
-    JSON.stringify({
-      level: "error",
-      event: "unhandled",
-      msg: err.message,
-      stack: err.stack,
-    }),
-  );
+  // 未捕捉エラーの最終フォールバック観測
+  log("error", "unhandled", { msg: err.message, stack: err.stack });
   return c.json(
     { error: "internal error", code: "INTERNAL" } satisfies ErrorBody,
     500,

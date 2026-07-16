@@ -7,7 +7,7 @@
       "devDependencies": {
         "@hono/cli": "^0.1.10",
         "@types/bun": "^1.3.0",
-        "@typescript/native-preview": "latest",
+        "@typescript/native-preview": "7.0.0-dev.20260503.1",
         "oxlint": "^1.0.0",
         "turbo": "^2.5.0",
         "typescript": "^5.9.0",
@@ -82,10 +82,6 @@
         "drizzle-kit": "^0.31.0",
       },
     },
-    "packages/oxlint-config": {
-      "name": "@app/oxlint-config",
-      "version": "0.0.0",
-    },
     "packages/shared": {
       "name": "@app/shared",
       "version": "0.0.0",
@@ -93,14 +89,6 @@
         "temporal-polyfill": "^0.3.0",
         "zod": "^4.0.0",
       },
-    },
-    "packages/tsconfig": {
-      "name": "@app/tsconfig",
-      "version": "0.0.0",
-    },
-    "packages/vite-config": {
-      "name": "@app/vite-config",
-      "version": "0.0.0",
     },
   },
   "packages": {
@@ -110,13 +98,7 @@
 
     "@app/db": ["@app/db@workspace:packages/db"],
 
-    "@app/oxlint-config": ["@app/oxlint-config@workspace:packages/oxlint-config"],
-
     "@app/shared": ["@app/shared@workspace:packages/shared"],
-
-    "@app/tsconfig": ["@app/tsconfig@workspace:packages/tsconfig"],
-
-    "@app/vite-config": ["@app/vite-config@workspace:packages/vite-config"],
 
     "@app/web": ["@app/web@workspace:apps/web"],
 

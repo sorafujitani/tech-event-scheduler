@@ -1,4 +1,8 @@
-import { remainingMs } from "@app/shared";
+import {
+  remainingMs,
+  TIMER_SOON_THRESHOLD_MS,
+  type TimerSnapshot,
+} from "@app/shared";
 import { Link } from "@tanstack/react-router";
 import { Button, IconButton } from "@yamada-ui/react/components/button";
 import {
@@ -20,26 +24,31 @@ import { Panel } from "../../components/ui/Panel";
 import { StatusPill } from "../../components/ui/StatusPill";
 import { useTimers } from "../../lib/live/react/hooks";
 import { useServerNow } from "../../lib/live/react/useTimerTick";
+import {
+  OVERRUN_VIBRATION_PATTERN,
+  SOON_VIBRATION_MS,
+  vibrate,
+} from "../../lib/vibrate";
 import { useEventDetail } from "../../hooks/useEventDetail";
 import { useTimerOps } from "../../hooks/mutations/useTimerOps";
 
-function vibrate(pattern: number | number[]) {
-  const nav = navigator as Navigator & {
-    vibrate?: (p: number | number[]) => boolean;
-  };
-  if (typeof nav.vibrate === "function") nav.vibrate(pattern);
-}
+const EXTEND_SEC = 300;
 
 function resolveUiStatus(
-  status: string,
-  snap: { status: string } | undefined,
+  snap: TimerSnapshot | undefined,
   remaining: number | null,
 ): TimerUiStatus {
-  if (status === "scheduled" || !snap) return "scheduled";
-  if (status === "paused") return "paused";
-  if (status === "running" && remaining != null && remaining < 0) return "overrun";
-  if (status === "running") return "running";
-  return "scheduled";
+  if (!snap) return "scheduled";
+  switch (snap.status) {
+    case "paused":
+      return "paused";
+    case "running":
+      return remaining != null && remaining < 0 ? "overrun" : "running";
+    case "scheduled":
+    case "done":
+    case "skipped":
+      return "scheduled";
+  }
 }
 
 export function TimerSection({ eventId }: { eventId: string }) {
@@ -93,10 +102,14 @@ export function TimerSection({ eventId }: { eventId: string }) {
       return;
     }
     const bucket =
-      remaining < 0 ? "overrun" : remaining < 60_000 ? "soon" : "normal";
+      remaining < 0
+        ? "overrun"
+        : remaining < TIMER_SOON_THRESHOLD_MS
+          ? "soon"
+          : "normal";
     if (bucket !== bucketRef.current) {
-      if (bucket === "soon") vibrate(30);
-      else if (bucket === "overrun") vibrate([60, 40, 60]);
+      if (bucket === "soon") vibrate(SOON_VIBRATION_MS);
+      else if (bucket === "overrun") vibrate(OVERRUN_VIBRATION_PATTERN);
       bucketRef.current = bucket;
     }
   }, [isRunning, remaining]);
@@ -129,8 +142,7 @@ export function TimerSection({ eventId }: { eventId: string }) {
     );
   }
 
-  const status = snap?.status ?? "scheduled";
-  const uiStatus = resolveUiStatus(status, snap, remaining);
+  const uiStatus = resolveUiStatus(snap, remaining);
   const meta = TIMER_STATUS_META[uiStatus];
   const pending =
     ops.start.isPending ||
@@ -207,7 +219,7 @@ export function TimerSection({ eventId }: { eventId: string }) {
                 minW="tapMain"
                 rounded="xl"
                 disabled={pending}
-                onClick={() => ops.extend.mutate(300)}
+                onClick={() => ops.extend.mutate(EXTEND_SEC)}
                 icon={<ClockPlusIcon boxSize="1.125rem" />}
               />
               <IconButton
@@ -243,7 +255,7 @@ export function TimerSection({ eventId }: { eventId: string }) {
                   colorScheme="orange"
                   size="md"
                   disabled={pending}
-                  onClick={() => ops.extend.mutate(300)}
+                  onClick={() => ops.extend.mutate(EXTEND_SEC)}
                 >
                   +5分
                 </Button>

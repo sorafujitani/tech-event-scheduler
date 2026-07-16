@@ -9,7 +9,11 @@ export function ModuleCardGrid({ eventId }: { eventId: string }) {
   const enabled = (data?.modules ?? [])
     .filter((m) => m.enabled)
     .map((m) => ({ moduleType: m.moduleType, orderIndex: m.orderIndex }));
-  const cards = resolveActiveModules(enabled).filter((a) => a.module.LiveCard);
+  const cards = resolveActiveModules(enabled).flatMap((a) =>
+    a.module.LiveCard
+      ? [{ moduleType: a.moduleType, LiveCard: a.module.LiveCard }]
+      : [],
+  );
   if (cards.length === 0) return null;
   return (
     <Box
@@ -17,12 +21,9 @@ export function ModuleCardGrid({ eventId }: { eventId: string }) {
       gridTemplateColumns="repeat(2, 1fr)"
       gap="md"
     >
-      {cards.map(({ moduleType, module }) => {
-        const Card = module.LiveCard;
-        return Card ? (
-          <Card key={moduleType} eventId={eventId} snapshot={undefined} />
-        ) : null;
-      })}
+      {cards.map(({ moduleType, LiveCard }) => (
+        <LiveCard key={moduleType} eventId={eventId} />
+      ))}
     </Box>
   );
 }

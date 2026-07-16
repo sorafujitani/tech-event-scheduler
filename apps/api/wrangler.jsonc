@@ -10,6 +10,7 @@
   // Public (non-secret) env values. Secrets (GOOGLE_*, BETTER_AUTH_*) are set
   // via `wrangler secret put` and live outside this file.
   "vars": {
+    "BETTER_AUTH_URL": "https://tech-event-scheduler-api.fujitanisora0414.workers.dev",
     "WEB_ORIGIN": "https://tech-event-scheduler-web.fujitanisora0414.workers.dev",
     "COOKIE_DOMAIN": "fujitanisora0414.workers.dev"
   },

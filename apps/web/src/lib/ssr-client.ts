@@ -7,6 +7,11 @@ interface ApiBinding {
   fetch: (req: Request) => Promise<Response>;
 }
 
+// wrangler の型生成が無い環境のため、この Worker が持つ binding を明示する。
+interface WebWorkerEnv {
+  API: ApiBinding;
+}
+
 // service binding fetch は自動で Cookie を運ばない → 受信リクエストの Cookie を明示転送（M4）。
 const withCookie = (init?: RequestInit): Headers => {
   const headers = new Headers(init?.headers);
@@ -21,7 +26,7 @@ export const createSsrClientOptions = (): ApiClientOptions => {
     return {
       origin: "https://api.internal",
       fetch: (input, init) => {
-        const api = (env as unknown as { API: ApiBinding }).API;
+        const api = (env as WebWorkerEnv).API;
         return api.fetch(
           new Request(input as RequestInfo, { ...init, headers: withCookie(init) }),
         );

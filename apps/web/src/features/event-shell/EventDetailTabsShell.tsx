@@ -1,6 +1,5 @@
-import { Link, Outlet } from "@tanstack/react-router";
+import { Outlet } from "@tanstack/react-router";
 import { Box } from "@yamada-ui/react/components/box";
-import { IconButton } from "@yamada-ui/react/components/button";
 import {
   CalendarIcon,
   ChevronLeftIcon,
@@ -11,6 +10,7 @@ import {
 import { Text } from "@yamada-ui/react/components/text";
 import { HStack } from "@yamada-ui/react/components/stack";
 import { ConfirmUndoProvider } from "../../components/feedback/ConfirmUndo";
+import { LinkIconButton } from "../../components/ui/LinkButton";
 import { TabNavLink } from "../../components/ui/TabNavLink";
 import { ColorModeToggle } from "../../components/shell/ColorModeToggle";
 import { ConnectionChip } from "../../components/shell/ConnectionChip";
@@ -29,9 +29,8 @@ export function EventDetailTabsShell({ eventId }: { eventId: string }) {
         <ShellHeader
           start={
             <HStack gap="sm" minW={0} align="center">
-              <IconButton
-                as={Link}
-                {...{ to: "/events" }}
+              <LinkIconButton
+                to="/events"
                 variant="ghost"
                 colorScheme="gray"
                 size="sm"

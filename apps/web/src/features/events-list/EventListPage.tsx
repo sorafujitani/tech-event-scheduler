@@ -1,21 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import type { EventStatus } from "@app/shared";
 import { Link } from "@tanstack/react-router";
 import { Badge } from "@yamada-ui/react/components/badge";
-import { Button } from "@yamada-ui/react/components/button";
 import { ChevronRightIcon } from "@yamada-ui/react/components/icon";
 import { HStack, VStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
 import { PageContainer } from "../../components/layout/PageContainer";
 import { AppShell } from "../../components/shell/AppShell";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { LinkButton } from "../../components/ui/LinkButton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Panel } from "../../components/ui/Panel";
-import { api } from "../../lib/api-client";
-import { unwrap } from "../../lib/api-error";
-import type { EventList } from "../../lib/api-types";
-import { qk } from "../../lib/query";
+import { useEvents } from "../../hooks/useEvents";
 
-const STATUS_LABEL: Record<string, string> = {
+const STATUS_LABEL: Record<EventStatus, string> = {
   draft: "下書き",
   published: "公開",
   live: "進行中",
@@ -23,7 +20,10 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "アーカイブ",
 };
 
-const STATUS_COLOR: Record<string, "gray" | "blue" | "green" | "orange" | "red"> = {
+const STATUS_COLOR: Record<
+  EventStatus,
+  "gray" | "blue" | "green" | "orange" | "red"
+> = {
   draft: "gray",
   published: "blue",
   live: "green",
@@ -32,10 +32,7 @@ const STATUS_COLOR: Record<string, "gray" | "blue" | "green" | "orange" | "red">
 };
 
 export function EventListPage() {
-  const { data } = useQuery({
-    queryKey: qk.events(),
-    queryFn: async () => unwrap<EventList>(await api().api.events.$get()),
-  });
+  const { data } = useEvents();
   const events = data ?? [];
 
   return (
@@ -46,9 +43,9 @@ export function EventListPage() {
           title="管理イベント"
           description="担当イベントの進行管理・設定を行います。"
           actions={
-            <Button as={Link} {...{ to: "/events/new" }} colorScheme="primary" size="sm" rounded="lg">
+            <LinkButton to="/events/new" colorScheme="primary" size="sm" rounded="lg">
               新規作成
-            </Button>
+            </LinkButton>
           }
         />
 
@@ -57,9 +54,9 @@ export function EventListPage() {
             title="イベントがありません"
             description="最初のイベントを作成して、進行表や Live 運営を始めましょう。"
             action={
-              <Button as={Link} {...{ to: "/events/new" }} colorScheme="primary" size="sm" rounded="lg">
+              <LinkButton to="/events/new" colorScheme="primary" size="sm" rounded="lg">
                 新規作成
-              </Button>
+              </LinkButton>
             }
           />
         ) : (
@@ -81,9 +78,9 @@ export function EventListPage() {
                         <Badge
                           size="sm"
                           variant="subtle"
-                          colorScheme={STATUS_COLOR[ev.status] ?? "gray"}
+                          colorScheme={STATUS_COLOR[ev.status]}
                         >
-                          {STATUS_LABEL[ev.status] ?? ev.status}
+                          {STATUS_LABEL[ev.status]}
                         </Badge>
                         <Text fontSize="sm" color="fg.muted">
                           {ev.role}

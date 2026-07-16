@@ -5,13 +5,16 @@ const PROD_API_ORIGIN =
 export const apiOrigin = (): string =>
   import.meta.env.PROD ? PROD_API_ORIGIN : "";
 
+// browser の現在 origin。SSR では空（公開URL 表示など client 専用の用途向け）。
+export const webOrigin = (): string =>
+  typeof location !== "undefined" ? location.origin : "";
+
 // better-auth/react は createAuthClient 時に baseURL を絶対URLとして検証する。
 // dev の相対 "/api/auth" は SSR(location なし)で throw するため、絶対URLを返す。
 // browser は location.origin（dev は vite proxy 経由で /api → :8788）、prod は api サブドメイン直。
 export const authBaseURL = (): string => {
   if (import.meta.env.PROD) return `${PROD_API_ORIGIN}/api/auth`;
-  const origin =
-    typeof location !== "undefined" ? location.origin : "http://localhost:5173";
+  const origin = webOrigin() || "http://localhost:5173";
   return `${origin}/api/auth`;
 };
 

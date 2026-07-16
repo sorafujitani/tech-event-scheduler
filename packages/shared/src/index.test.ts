@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   elapsedMs,
-  isOverrun,
   remainingMs,
   serializeRow,
   type TimerSnapshot,
@@ -76,7 +75,7 @@ describe("elapsedMs", () => {
   });
 });
 
-describe("remainingMs / isOverrun", () => {
+describe("remainingMs", () => {
   const running: TimerSnapshot = {
     ...base,
     status: "running",
@@ -89,13 +88,11 @@ describe("remainingMs / isOverrun", () => {
   it("予定内は正の残り", () => {
     // 60s - 10s = 50s 残り
     expect(remainingMs(running, 10_000)).toBe(50_000);
-    expect(isOverrun(running, 10_000)).toBe(false);
   });
 
   it("予定超過は負の残り = overrun", () => {
     // 60s - 70s = -10s
     expect(remainingMs(running, 70_000)).toBe(-10_000);
-    expect(isOverrun(running, 70_000)).toBe(true);
   });
 });
 

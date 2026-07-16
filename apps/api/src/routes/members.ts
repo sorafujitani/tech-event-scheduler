@@ -16,7 +16,7 @@ const ownerMemberScoped = new Hono<MemberEnv>()
     const { userId, role } = c.req.valid("json");
     const m = await membersRepo.addMember(
       db,
-      c.req.param("eventId")!,
+      c.var.eventId,
       userId,
       role,
       c.var.member.userId,
@@ -25,8 +25,8 @@ const ownerMemberScoped = new Hono<MemberEnv>()
   })
   .patch("/:userId", zValidator("json", patchMemberRoleSchema), async (c) => {
     const db = createDb(c.env.DB);
-    const eventId = c.req.param("eventId")!;
-    const userId = c.req.param("userId")!;
+    const eventId = c.var.eventId;
+    const userId = c.req.param("userId");
     const { role } = c.req.valid("json");
     const cur = await membersRepo.getMembership(db, eventId, userId);
     if (!cur) throw new DomainError("NOT_FOUND", "member not found");
@@ -43,8 +43,8 @@ const ownerMemberScoped = new Hono<MemberEnv>()
     const db = createDb(c.env.DB);
     const ok = await membersRepo.deleteMemberAtomic(
       db,
-      c.req.param("eventId")!,
-      c.req.param("userId")!,
+      c.var.eventId,
+      c.req.param("userId"),
     );
     if (!ok) throw new DomainError("CONFLICT", "cannot remove the last owner");
     return c.json({ ok: true } as const);
@@ -53,7 +53,7 @@ const ownerMemberScoped = new Hono<MemberEnv>()
 export const memberRoutes = new Hono<MemberEnv>()
   .get("/", async (c) => {
     const db = createDb(c.env.DB);
-    const rows = await membersRepo.listMembers(db, c.req.param("eventId")!);
+    const rows = await membersRepo.listMembers(db, c.var.eventId);
     return c.json(rows.map(serializeRow));
   })
   .route("/", ownerMemberScoped);

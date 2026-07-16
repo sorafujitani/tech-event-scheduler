@@ -1,4 +1,9 @@
-import { elapsedMs, remainingMs, type TimerSnapshot } from "@app/shared";
+import {
+  elapsedMs,
+  remainingMs,
+  TIMER_SOON_THRESHOLD_MS,
+  type TimerSnapshot,
+} from "@app/shared";
 import { Box } from "@yamada-ui/react/components/box";
 import { Progress } from "@yamada-ui/react/components/progress";
 import { VStack } from "@yamada-ui/react/components/stack";
@@ -53,7 +58,7 @@ export function TimerDisplay({
 
   const timeColor = isOverrunDisplay
     ? "timer.overrun"
-    : uiStatus === "running" && remaining < 60_000
+    : uiStatus === "running" && remaining < TIMER_SOON_THRESHOLD_MS
       ? "timer.soon"
       : "timer.normal";
 

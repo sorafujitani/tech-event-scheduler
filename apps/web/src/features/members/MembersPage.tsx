@@ -39,30 +39,33 @@ export function MembersPage({ eventId }: { eventId: string }) {
           />
         ) : (
           <VStack gap="sm" align="stretch">
-            {members.map((mem) => (
-              <Panel key={mem.id} p="md">
-                <HStack justify="space-between" align="center">
-                  <VStack gap={0} align="start" minW={0}>
-                    <Text fontWeight="medium" truncated>
-                      {mem.userId ?? mem.invitedEmail ?? "(招待)"}
-                    </Text>
-                    <Text fontSize="sm" color="fg.muted">
-                      {mem.role} · {mem.status}
-                    </Text>
-                  </VStack>
-                  {mem.userId ? (
-                    <Button
-                      size="sm"
-                      variant="subtle"
-                      colorScheme="red"
-                      onClick={() => mutations.remove.mutate(mem.userId as string)}
-                    >
-                      解除
-                    </Button>
-                  ) : null}
-                </HStack>
-              </Panel>
-            ))}
+            {members.map((mem) => {
+              const memberUserId = mem.userId;
+              return (
+                <Panel key={mem.id} p="md">
+                  <HStack justify="space-between" align="center">
+                    <VStack gap={0} align="start" minW={0}>
+                      <Text fontWeight="medium" truncated>
+                        {memberUserId ?? mem.invitedEmail ?? "(招待)"}
+                      </Text>
+                      <Text fontSize="sm" color="fg.muted">
+                        {mem.role} · {mem.status}
+                      </Text>
+                    </VStack>
+                    {memberUserId ? (
+                      <Button
+                        size="sm"
+                        variant="subtle"
+                        colorScheme="red"
+                        onClick={() => mutations.remove.mutate(memberUserId)}
+                      >
+                        解除
+                      </Button>
+                    ) : null}
+                  </HStack>
+                </Panel>
+              );
+            })}
           </VStack>
         )}
 

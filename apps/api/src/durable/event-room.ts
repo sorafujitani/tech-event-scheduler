@@ -1,20 +1,22 @@
 import { createDb } from "@app/db";
-import type { LiveMessage } from "@app/shared";
 import { DurableObject } from "cloudflare:workers";
 import type { Bindings } from "../env";
 import { statusForCode } from "../errors";
-import { verifyWsTicket } from "../lib/ticket";
+import { log } from "../lib/log";
 import { flushCounterWal, listCounters } from "../repo/counters";
 import { newId } from "../repo/ids";
 import { applyTimerTransition, listItems } from "../repo/schedule";
+import { RoomConnections } from "./connections";
 import {
   applyAdjust,
   applyReset,
   type CounterState,
 } from "./counter-core";
+import { IdempotencyStore } from "./idempotency";
 import {
   INTERNAL_COMMAND_PATH,
   INTERNAL_WS_PATH,
+  roomCommandSchema,
   type RoomCommand,
   type RoomResponse,
 } from "./protocol";
@@ -33,7 +35,9 @@ import {
   IllegalTransition,
   pause,
   resume,
+  roomTimerFromRow,
   type RoomTimer,
+  type TimerRow,
   skip,
   start,
 } from "./timer-machine";
@@ -43,21 +47,16 @@ interface RoomMeta {
   eventId: string | null;
   version: number;
 }
-interface ConnMeta {
-  userId: string;
-  role: "owner" | "manager";
-  joinedAtMs: number;
-}
 
 const FLUSH_DEBOUNCE_MS = 5_000;
-const RECENT_IDEMP_CAP = 1024;
 
 export class EventRoom extends DurableObject<Bindings> {
   private eventId: string | null = null;
   private version = 0;
   private timers = new Map<string, RoomTimer>();
   private counters = new Map<string, CounterState>();
-  private recentIdemp = new Set<string>();
+  private idemp: IdempotencyStore;
+  private conns: RoomConnections;
   private walGlobalSeq = 0;
   private flushDueMs: number | null = null;
   private hydrated = false;
@@ -76,6 +75,8 @@ export class EventRoom extends DurableObject<Bindings> {
 
   constructor(ctx: DurableObjectState, env: Bindings) {
     super(ctx, env);
+    this.idemp = new IdempotencyStore(ctx.storage);
+    this.conns = new RoomConnections(ctx, env.BETTER_AUTH_SECRET);
     ctx.blockConcurrencyWhile(() => this.restore());
   }
 
@@ -112,6 +113,13 @@ export class EventRoom extends DurableObject<Bindings> {
     return this.hydrationPromise;
   }
 
+  // 不変条件を満たさない行は取り込まない（write-through が破れた兆候として観測に残す）。
+  private timerFromRow(row: TimerRow): RoomTimer | null {
+    const t = roomTimerFromRow(row);
+    if (!t) log("error", "timer_row_invalid", { itemId: row.id, status: row.status });
+    return t;
+  }
+
   private async hydrate(): Promise<void> {
     if (!this.eventId) return;
     const db = createDb(this.env.DB);
@@ -120,21 +128,11 @@ export class EventRoom extends DurableObject<Bindings> {
       listCounters(db, this.eventId),
     ]);
     await Promise.all(
-      items.map((row) => {
-        // D1 は write-through で 5 列の不変条件を維持しているため RoomTimer として扱える。
-        const t = {
-          id: row.id,
-          plannedDurationSec: row.plannedDurationSec,
-          track: row.track,
-          overrunNotified: false,
-          status: row.status,
-          actualStartedAtMs: row.actualStartedAtMs,
-          accumulatedPauseMs: row.accumulatedPauseMs,
-          pausedAtMs: row.pausedAtMs,
-          endedAtMs: row.endedAtMs,
-        } as RoomTimer;
+      items.flatMap((row) => {
+        const t = this.timerFromRow(row);
+        if (!t) return [];
         this.timers.set(t.id, t);
-        return this.ctx.storage.put(`timer:${t.id}`, t);
+        return [this.ctx.storage.put(`timer:${t.id}`, t)];
       }),
     );
     await Promise.all(
@@ -160,28 +158,14 @@ export class EventRoom extends DurableObject<Bindings> {
       const rows = await listItems(createDb(this.env.DB), this.eventId);
       const seen = new Set(rows.map((r) => r.id));
       await Promise.all(
-        rows.map((row) => {
+        rows.flatMap((row) => {
           const cur = this.timers.get(row.id);
-          const next: RoomTimer = cur
-            ? {
-                ...cur,
-                plannedDurationSec: row.plannedDurationSec,
-                track: row.track,
-              }
-            : // hydrate と同じ根拠: D1 は write-through で 5 列の不変条件を維持している。
-              ({
-                id: row.id,
-                plannedDurationSec: row.plannedDurationSec,
-                track: row.track,
-                overrunNotified: false,
-                status: row.status,
-                actualStartedAtMs: row.actualStartedAtMs,
-                accumulatedPauseMs: row.accumulatedPauseMs,
-                pausedAtMs: row.pausedAtMs,
-                endedAtMs: row.endedAtMs,
-              } as RoomTimer);
+          const next: RoomTimer | null = cur
+            ? { ...cur, plannedDurationSec: row.plannedDurationSec, track: row.track }
+            : this.timerFromRow(row);
+          if (!next) return [];
           this.timers.set(next.id, next);
-          return this.ctx.storage.put(`timer:${next.id}`, next);
+          return [this.ctx.storage.put(`timer:${next.id}`, next)];
         }),
       );
       const removed = [...this.timers.keys()].filter((id) => !seen.has(id));
@@ -194,7 +178,7 @@ export class EventRoom extends DurableObject<Bindings> {
       this.version++;
       await this.persistVersion();
       // broadcast は D1 の orderIndex 順（rows 順）で並べる。
-      this.broadcast(
+      this.conns.broadcast(
         scheduleMessage(
           this.version,
           rows.flatMap((row) => {
@@ -239,8 +223,18 @@ export class EventRoom extends DurableObject<Bindings> {
     }
     if (url.pathname === INTERNAL_COMMAND_PATH && req.method === "POST") {
       await this.ensureHydrated();
-      const cmd = (await req.json()) as RoomCommand;
-      const result = await this.dispatch(cmd);
+      const parsed = roomCommandSchema.safeParse(
+        await req.json().catch(() => null),
+      );
+      if (!parsed.success) {
+        const body: RoomResponse = {
+          ok: false,
+          error: "invalid room command",
+          code: "BAD_REQUEST",
+        };
+        return Response.json(body, { status: statusForCode(body.code) });
+      }
+      const result = await this.dispatch(parsed.data);
       const status = result.ok ? 200 : statusForCode(result.code);
       return Response.json(result, { status });
     }
@@ -266,8 +260,11 @@ export class EventRoom extends DurableObject<Bindings> {
           // hydrate は初回起動のみなので、起動後の REST mutation はこれで届く。
           return await this.serialize(() => this.resyncSchedule());
         case "snapshot.get":
-        case "sync.counters":
           return this.snapshotResult();
+        default: {
+          const unexpected: never = cmd;
+          return unexpected;
+        }
       }
     } catch (e) {
       if (e instanceof IllegalTransition)
@@ -283,7 +280,7 @@ export class EventRoom extends DurableObject<Bindings> {
     const idempKey = `idemp:t:${cmd.idempotencyKey}`;
     const cur = this.timers.get(cmd.itemId);
     if (!cur) return { ok: false, error: "timer not found", code: "NOT_FOUND" };
-    if (await this.isApplied(cmd.idempotencyKey, idempKey)) {
+    if (await this.idemp.isApplied(cmd.idempotencyKey, idempKey)) {
       return this.timerResult(cur); // 再送は現状を返す（二重適用しない）
     }
     const now = Date.now();
@@ -319,18 +316,26 @@ export class EventRoom extends DurableObject<Bindings> {
     // 順序: storage → in-memory → D1 write-through → version → idemp → broadcast（§5.2-2）
     await this.ctx.storage.put(`timer:${next.id}`, next);
     this.timers.set(next.id, next);
-    await applyTimerTransition(createDb(this.env.DB), next.id, {
-      status: next.status,
-      actualStartedAtMs: next.actualStartedAtMs,
-      accumulatedPauseMs: next.accumulatedPauseMs,
-      pausedAtMs: next.pausedAtMs,
-      endedAtMs: next.endedAtMs,
-      plannedDurationSec: next.plannedDurationSec,
-    });
+    try {
+      await applyTimerTransition(createDb(this.env.DB), next.id, {
+        status: next.status,
+        actualStartedAtMs: next.actualStartedAtMs,
+        accumulatedPauseMs: next.accumulatedPauseMs,
+        pausedAtMs: next.pausedAtMs,
+        endedAtMs: next.endedAtMs,
+        plannedDurationSec: next.plannedDurationSec,
+      });
+    } catch (e) {
+      // D1 失敗時は idemp 未マークのまま遷移を巻き戻し、同一キー再送をクリーンに成功させる
+      // （巻き戻さないと再送が IllegalTransition → CONFLICT で詰まる）。
+      this.timers.set(cur.id, cur);
+      await this.ctx.storage.put(`timer:${cur.id}`, cur);
+      throw e;
+    }
     this.version++;
     await this.persistVersion();
-    await this.markApplied(cmd.idempotencyKey, idempKey);
-    this.broadcast(timerMessage(this.version, now, toTimerSnapshot(next)));
+    await this.idemp.markApplied(cmd.idempotencyKey, idempKey);
+    this.conns.broadcast(timerMessage(this.version, now, toTimerSnapshot(next)));
     await this.reconcileAlarm();
     return this.timerResult(next, now);
   }
@@ -343,7 +348,7 @@ export class EventRoom extends DurableObject<Bindings> {
     const cur = this.counters.get(cmd.counterId);
     if (!cur)
       return { ok: false, error: "counter not found", code: "NOT_FOUND" };
-    if (await this.isApplied(cmd.idempotencyKey, idempKey)) {
+    if (await this.idemp.isApplied(cmd.idempotencyKey, idempKey)) {
       return this.counterResult(cmd.counterId, cur);
     }
     const now = Date.now();
@@ -382,65 +387,22 @@ export class EventRoom extends DurableObject<Bindings> {
       id: cmd.counterId,
     });
     this.counters.set(cmd.counterId, next);
-    await this.markApplied(cmd.idempotencyKey, idempKey);
+    await this.idemp.markApplied(cmd.idempotencyKey, idempKey);
     this.version++;
     await this.persistVersion();
-    this.broadcast(counterMessage(this.version, next, cmd.counterId));
+    this.conns.broadcast(counterMessage(this.version, next, cmd.counterId));
     this.flushDueMs = now + FLUSH_DEBOUNCE_MS;
     await this.reconcileAlarm();
     return this.counterResult(cmd.counterId, next, now);
   }
 
-  // --- 冪等三段（メモリ + storage、D1 unique は flush 側）---
-  private async isApplied(key: string, storageKey: string): Promise<boolean> {
-    if (this.recentIdemp.has(key)) return true;
-    return (await this.ctx.storage.get(storageKey)) != null;
-  }
-  private async markApplied(key: string, storageKey: string): Promise<void> {
-    this.recentIdemp.add(key);
-    if (this.recentIdemp.size > RECENT_IDEMP_CAP) {
-      const first = this.recentIdemp.values().next().value;
-      if (first) this.recentIdemp.delete(first);
-    }
-    await this.ctx.storage.put(storageKey, { at: Date.now() });
-  }
-
   // --- WebSocket（Hibernation）---
   private async handleUpgrade(req: Request): Promise<Response> {
-    const meta = await this.authConn(req);
+    const meta = await this.conns.authorize(req, this.eventId);
     if (!meta) return new Response("unauthorized", { status: 401 });
-    const pair = new WebSocketPair();
-    const [client, server] = [pair[0], pair[1]];
-    this.ctx.acceptWebSocket(server, [`user:${meta.userId}`]);
-    server.serializeAttachment(meta);
-    server.send(JSON.stringify(this.buildSnapshot()));
+    const res = this.conns.accept(meta, JSON.stringify(this.buildSnapshot()));
     await this.broadcastPresence();
-    return new Response(null, { status: 101, webSocket: client });
-  }
-
-  private async authConn(req: Request): Promise<ConnMeta | null> {
-    // 一次: api が member 認可済みで付与する x-conn-meta
-    const raw = req.headers.get("x-conn-meta");
-    if (raw) {
-      try {
-        const m = JSON.parse(raw) as { userId: string; role: "owner" | "manager" };
-        return { ...m, joinedAtMs: Date.now() };
-      } catch {
-        /* fallthrough to ticket */
-      }
-    }
-    // フォールバック: 署名 ticket（cookie 不達経路、C1）
-    const ticket = req.headers.get("x-ws-ticket");
-    if (ticket && this.eventId) {
-      const p = await verifyWsTicket(
-        this.env.BETTER_AUTH_SECRET,
-        ticket,
-        Date.now(),
-      );
-      if (p && p.eventId === this.eventId)
-        return { userId: p.userId, role: p.role, joinedAtMs: Date.now() };
-    }
-    return null;
+    return res;
   }
 
   override async webSocketMessage(
@@ -472,22 +434,14 @@ export class EventRoom extends DurableObject<Bindings> {
   }
 
   // --- broadcast / snapshot ---
-  private broadcast(msg: LiveMessage): void {
-    const json = JSON.stringify(msg);
-    for (const ws of this.ctx.getWebSockets()) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(json);
-    }
-  }
   // FE store は「差分 version は cur+1 厳守、<=cur は冪等無視」のため、presence も
   // version を bump して送る（bump しないと既接続クライアントが presence 差分を常に破棄する）。
-  // webSocketClose 時点の getWebSockets() は閉じたソケットを含み得るため exclude で除外する。
   private async broadcastPresence(exclude?: WebSocket): Promise<void> {
     this.version++;
     await this.persistVersion();
-    const count = this.ctx
-      .getWebSockets()
-      .filter((ws) => ws !== exclude).length;
-    this.broadcast(presenceMessage(this.version, count));
+    this.conns.broadcast(
+      presenceMessage(this.version, this.conns.count(exclude)),
+    );
   }
   private stateView(): RoomStateView {
     return {
@@ -497,10 +451,10 @@ export class EventRoom extends DurableObject<Bindings> {
         id,
         state,
       })),
-      presenceCount: this.ctx.getWebSockets().length,
+      presenceCount: this.conns.count(),
     };
   }
-  private buildSnapshot(): LiveMessage {
+  private buildSnapshot() {
     return snapshotMessage(this.stateView(), Date.now());
   }
   private snapshotResult(): RoomResponse {
@@ -575,7 +529,7 @@ export class EventRoom extends DurableObject<Bindings> {
         await this.ctx.storage.put(`timer:${next.id}`, next);
         this.version++;
         await this.persistVersion();
-        this.broadcast(timerMessage(this.version, now, toTimerSnapshot(next)));
+        this.conns.broadcast(timerMessage(this.version, now, toTimerSnapshot(next)));
       }
     }
     /* oxlint-enable no-await-in-loop */
@@ -596,7 +550,11 @@ export class EventRoom extends DurableObject<Bindings> {
       await flushCounterWal(createDb(this.env.DB), entries, now);
       await this.ctx.storage.delete(keys); // 全成功 → 積んだ全 entry を削除
       this.flushDueMs = null;
-    } catch {
+    } catch (e) {
+      log("error", "wal_flush_failed", {
+        entries: entries.length,
+        error: e instanceof Error ? e.message : String(e),
+      });
       this.flushDueMs = now + FLUSH_DEBOUNCE_MS; // 全残置で次 alarm 再送
     }
   }

@@ -13,12 +13,7 @@ export type AuthedEnv = {
 export type MemberEnv = {
   Bindings: Bindings;
   Variables: AuthedEnv["Variables"] & {
+    eventId: string;
     member: { role: "owner" | "manager"; userId: string };
   };
-};
-
-/** counter/timer write 系（Idempotency-Key 必須）用 */
-export type IdempotentEnv = {
-  Bindings: Bindings;
-  Variables: MemberEnv["Variables"] & { idempotencyKey: string };
 };

@@ -6,7 +6,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { flushCounterWal, listCounters } from "../src/repo/counters";
 import type { WalEntry } from "../src/durable/wal";
 import * as eventsRepo from "../src/repo/events";
-import { newId, nowDate, nowMs } from "../src/repo/ids";
+import { newId, nowDate } from "../src/repo/ids";
+
+const nowMs = (): number => Date.now(); // *_at_ms 列用（素通し）
 
 const db: Database = createDb(env.DB);
 

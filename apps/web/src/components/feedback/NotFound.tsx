@@ -1,9 +1,8 @@
-import { Button } from "@yamada-ui/react/components/button";
 import { Heading } from "@yamada-ui/react/components/heading";
 import { VStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
-import { Link } from "@tanstack/react-router";
 import { PageContainer } from "../layout/PageContainer";
+import { LinkButton } from "../ui/LinkButton";
 import { Panel } from "../ui/Panel";
 
 export function NotFound() {
@@ -18,9 +17,9 @@ export function NotFound() {
             <Text color="fg.muted" textAlign="center">
               URL をご確認ください。
             </Text>
-            <Button as={Link} {...{ to: "/events" }} colorScheme="primary">
+            <LinkButton to="/events" colorScheme="primary">
               イベント一覧へ
-            </Button>
+            </LinkButton>
           </VStack>
         </Panel>
       </VStack>

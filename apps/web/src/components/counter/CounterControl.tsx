@@ -2,6 +2,7 @@ import { Button, IconButton } from "@yamada-ui/react/components/button";
 import { MinusIcon, PlusIcon } from "@yamada-ui/react/components/icon";
 import { HStack, VStack } from "@yamada-ui/react/components/stack";
 import { Text } from "@yamada-ui/react/components/text";
+import { TAP_VIBRATION_MS, vibrate } from "../../lib/vibrate";
 import { Panel } from "../ui/Panel";
 
 export type CounterControlProps = {
@@ -10,13 +11,7 @@ export type CounterControlProps = {
   disabled?: boolean;
   onAdjust: (delta: number) => void;
   onReset: () => void;
-  onHistory?: () => void;
 };
-
-function vibrate(ms: number) {
-  const nav = navigator as Navigator & { vibrate?: (p: number) => boolean };
-  if (typeof nav.vibrate === "function") nav.vibrate(ms);
-}
 
 export function CounterControl({
   value,
@@ -24,11 +19,10 @@ export function CounterControl({
   disabled,
   onAdjust,
   onReset,
-  onHistory,
 }: CounterControlProps) {
   const over = capacity != null && value > capacity;
   const tap = (d: number) => {
-    vibrate(10);
+    vibrate(TAP_VIBRATION_MS);
     onAdjust(d);
   };
   const off = disabled ?? false;
@@ -81,11 +75,6 @@ export function CounterControl({
           <Button size="xs" variant="ghost" colorScheme="gray" disabled={off} onClick={() => tap(10)}>
             +10
           </Button>
-          {onHistory ? (
-            <Button size="xs" variant="ghost" colorScheme="gray" onClick={onHistory}>
-              履歴
-            </Button>
-          ) : null}
           <Button size="xs" variant="ghost" colorScheme="red" onClick={onReset}>
             リセット
           </Button>

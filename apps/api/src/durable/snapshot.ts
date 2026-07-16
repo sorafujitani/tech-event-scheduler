@@ -70,7 +70,7 @@ export function buildFullSnapshot(
       moduleType: "attendance",
       data: {
         counters: counters.map((c) => ({
-          id: c.counterId,
+          counterId: c.counterId,
           value: c.value,
           seq: c.seq,
         })),

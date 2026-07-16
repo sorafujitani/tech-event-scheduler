@@ -1,55 +1,8 @@
 import { Temporal } from "temporal-polyfill";
 import { z } from "zod";
 
-export { Temporal };
-
-export const Email = z.email();
-export type Email = z.infer<typeof Email>;
-
-export const NonEmptyString = z.string().min(1);
-export type NonEmptyString = z.infer<typeof NonEmptyString>;
-
-export type Instant = Temporal.Instant;
-export type ZonedDateTime = Temporal.ZonedDateTime;
-export type PlainDate = Temporal.PlainDate;
-export type Duration = Temporal.Duration;
-
-const temporalSchema = <T>(parse: (s: string) => T, label: string) =>
-  z
-    .string()
-    .refine(
-      (s) => {
-        try {
-          parse(s);
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      { message: `Invalid ${label}` },
-    )
-    .transform(parse);
-
-export const InstantString = temporalSchema(
-  (s) => Temporal.Instant.from(s),
-  "ISO 8601 instant",
-);
-
-export const ZonedDateTimeString = temporalSchema(
-  (s) => Temporal.ZonedDateTime.from(s),
-  "ZonedDateTime string",
-);
-
-export const PlainDateString = temporalSchema(
-  (s) => Temporal.PlainDate.from(s),
-  "ISO 8601 plain date",
-);
-
-export const dateToInstant = (d: Date): Temporal.Instant =>
+const dateToInstant = (d: Date): Temporal.Instant =>
   Temporal.Instant.fromEpochMilliseconds(d.getTime());
-
-export const instantToDate = (i: Temporal.Instant): Date =>
-  new Date(i.epochMilliseconds);
 
 // ---------------------------------------------------------------------------
 // ドメイン enum（単一ソース）。`@app/db` が text(name,{enum}) と zod 双方に食わせ、
@@ -211,28 +164,27 @@ export function remainingMs(s: TimerSnapshot, nowMs: number): number {
   return s.plannedDurationSec * 1000 - elapsedMs(s, nowMs);
 }
 
-export function isOverrun(s: TimerSnapshot, nowMs: number): boolean {
-  return remainingMs(s, nowMs) < 0;
-}
+/** 残りがこれを切ったら「まもなく終了」表示・通知に切り替える閾値。 */
+export const TIMER_SOON_THRESHOLD_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // ライブ状態のスナップショット & WS wire 型（M3: counter は serverNowMs を持たない）。
 // ModuleSnapshot は discriminated union にして exhaustive 描画を型で強制する。
 // ---------------------------------------------------------------------------
 
-export interface CounterSnapshot {
+export interface CounterDiff {
   counterId: string;
   value: number;
   seq: number;
+}
+
+export interface CounterSnapshot extends CounterDiff {
   capacity: number | null;
 }
 
 export type ModuleSnapshot =
   | { moduleType: "timetable"; data: { items: TimerSnapshot[] } }
-  | {
-      moduleType: "attendance";
-      data: { counters: { id: string; value: number; seq: number }[] };
-    };
+  | { moduleType: "attendance"; data: { counters: CounterDiff[] } };
 
 export interface FullSnapshot {
   version: number;
@@ -256,10 +208,110 @@ export type LiveMessage =
       serverNowMs: number;
       payload: TimerSnapshot;
     }
-  | {
-      kind: "counter";
-      version: number;
-      payload: { counterId: string; value: number; seq: number };
-    }
+  | { kind: "counter"; version: number; payload: CounterDiff }
   | { kind: "schedule"; version: number; payload: { items: TimerSnapshot[] } }
   | { kind: "presence"; version: number; payload: { count: number } };
+
+// ---------------------------------------------------------------------------
+// WS 受信境界の zod スキーマ。型定義（上記）が単一ソースで、satisfies により
+// スキーマと型のドリフトをコンパイル時に検出する。
+// ---------------------------------------------------------------------------
+
+const timerSnapshotSchema = z.discriminatedUnion("status", [
+  z.object({
+    id: z.string(),
+    plannedDurationSec: z.number(),
+    status: z.literal("scheduled"),
+    actualStartedAtMs: z.null(),
+    accumulatedPauseMs: z.number(),
+    pausedAtMs: z.null(),
+    endedAtMs: z.null(),
+  }),
+  z.object({
+    id: z.string(),
+    plannedDurationSec: z.number(),
+    status: z.literal("running"),
+    actualStartedAtMs: z.number(),
+    accumulatedPauseMs: z.number(),
+    pausedAtMs: z.null(),
+    endedAtMs: z.null(),
+  }),
+  z.object({
+    id: z.string(),
+    plannedDurationSec: z.number(),
+    status: z.literal("paused"),
+    actualStartedAtMs: z.number(),
+    accumulatedPauseMs: z.number(),
+    pausedAtMs: z.number(),
+    endedAtMs: z.null(),
+  }),
+  z.object({
+    id: z.string(),
+    plannedDurationSec: z.number(),
+    status: z.enum(["done", "skipped"]),
+    actualStartedAtMs: z.number(),
+    accumulatedPauseMs: z.number(),
+    pausedAtMs: z.null(),
+    endedAtMs: z.number(),
+  }),
+]) satisfies z.ZodType<TimerSnapshot>;
+
+const counterDiffSchema = z.object({
+  counterId: z.string(),
+  value: z.number(),
+  seq: z.number(),
+}) satisfies z.ZodType<CounterDiff>;
+
+const counterSnapshotSchema = counterDiffSchema.extend({
+  capacity: z.number().nullable(),
+}) satisfies z.ZodType<CounterSnapshot>;
+
+const moduleSnapshotSchema = z.discriminatedUnion("moduleType", [
+  z.object({
+    moduleType: z.literal("timetable"),
+    data: z.object({ items: z.array(timerSnapshotSchema) }),
+  }),
+  z.object({
+    moduleType: z.literal("attendance"),
+    data: z.object({ counters: z.array(counterDiffSchema) }),
+  }),
+]) satisfies z.ZodType<ModuleSnapshot>;
+
+const fullSnapshotSchema = z.object({
+  version: z.number(),
+  serverNowMs: z.number(),
+  timers: z.array(timerSnapshotSchema),
+  counters: z.array(counterSnapshotSchema),
+  modules: z.array(moduleSnapshotSchema),
+  presence: z.object({ count: z.number() }),
+}) satisfies z.ZodType<FullSnapshot>;
+
+export const LiveMessage = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("snapshot"),
+    version: z.number(),
+    serverNowMs: z.number(),
+    payload: fullSnapshotSchema,
+  }),
+  z.object({
+    kind: z.literal("timer"),
+    version: z.number(),
+    serverNowMs: z.number(),
+    payload: timerSnapshotSchema,
+  }),
+  z.object({
+    kind: z.literal("counter"),
+    version: z.number(),
+    payload: counterDiffSchema,
+  }),
+  z.object({
+    kind: z.literal("schedule"),
+    version: z.number(),
+    payload: z.object({ items: z.array(timerSnapshotSchema) }),
+  }),
+  z.object({
+    kind: z.literal("presence"),
+    version: z.number(),
+    payload: z.object({ count: z.number() }),
+  }),
+]) satisfies z.ZodType<LiveMessage>;

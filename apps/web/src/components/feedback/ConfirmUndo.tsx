@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -28,6 +29,20 @@ export function ConfirmUndoProvider({ children }: { children: ReactNode }) {
   const [label, setLabel] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const action = useRef<(() => void) | null>(null);
+
+  // アンマウント時は保留中 action を確定（flush）する。トーストは過去形で
+  // 「実行済み」を示す UI 契約のため、遷移で黙って捨てると intent が失われる。
+  useEffect(
+    () => () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        action.current?.();
+      }
+      timer.current = null;
+      action.current = null;
+    },
+    [],
+  );
 
   const run = useCallback((nextLabel: string, nextAction: () => void) => {
     if (timer.current) {

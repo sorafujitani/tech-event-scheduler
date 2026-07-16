@@ -1,13 +1,12 @@
 import { Box } from "@yamada-ui/react/components/box";
 import { HStack } from "@yamada-ui/react/components/stack";
-import { Link } from "@tanstack/react-router";
 import { Text } from "@yamada-ui/react/components/text";
+import { LinkBox } from "./LinkButton";
 
 export function AppLogo() {
   return (
-    <Box
-      as={Link}
-      {...{ to: "/events" }}
+    <LinkBox
+      to="/events"
       textDecoration="none"
       _hover={{ opacity: 0.85 }}
       transition="opacity 150ms ease"
@@ -35,6 +34,6 @@ export function AppLogo() {
           </Text>
         </Text>
       </HStack>
-    </Box>
+    </LinkBox>
   );
 }

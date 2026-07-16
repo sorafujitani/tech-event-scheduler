@@ -1,4 +1,4 @@
-import type { LiveMessage } from "@app/shared";
+import { LiveMessage } from "@app/shared";
 import type { ApiClient } from "../api-client";
 import { eventWsUrl } from "../env";
 import type { ServerClock } from "./clock";
@@ -15,15 +15,26 @@ const HEARTBEAT_MS = 25_000; // app層 ping（DO Hibernation idle と両立）
 const PONG_TIMEOUT_MS = 10_000;
 const BACKOFF_BASE_MS = 1_000;
 const BACKOFF_MAX_MS = 15_000;
+const CONNECT_TIMEOUT_MS = 10_000;
+
+const KNOWN_KINDS: ReadonlySet<string> = new Set([
+  "snapshot",
+  "timer",
+  "counter",
+  "schedule",
+  "presence",
+] satisfies LiveMessage["kind"][]);
 
 export class LiveSocket {
   private ws: WebSocket | null = null;
   private state: ConnectionState = "connecting";
   private attempt = 0;
   private closedByUs = false;
+  private connectInFlight = false;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private stateListeners = new Set<(s: ConnectionState) => void>();
 
   constructor(
@@ -46,8 +57,8 @@ export class LiveSocket {
     this.closedByUs = true;
     this.unbindVisibility();
     this.clearTimers();
-    this.ws?.close(1000, "client-stop");
-    this.ws = null;
+    this.disposeWs(1000, "client-stop");
+    this.setState("offline");
   }
   subscribeState = (l: (s: ConnectionState) => void) => {
     this.stateListeners.add(l);
@@ -58,25 +69,59 @@ export class LiveSocket {
   getStateValue = (): ConnectionState => this.state;
 
   // C1: cookie 第一 → close 1008/4401 観測で次回 ticket フォールバック（query param で接続）。
+  // 多重呼び出し（visibility/online の同時発火）は in-flight フラグと readyState で弾く。
   private async connect(useTicket = false): Promise<void> {
+    if (this.connectInFlight) return;
+    if (
+      this.ws?.readyState === WebSocket.CONNECTING ||
+      this.ws?.readyState === WebSocket.OPEN
+    ) {
+      return;
+    }
+    this.clearTimers();
+    this.disposeWs(1000, "superseded");
+    this.connectInFlight = true;
     this.setState(this.attempt === 0 ? "connecting" : "reconnecting");
     let ticket: string | undefined;
     if (useTicket) {
       try {
         ticket = await fetchWsTicket(this.eventId, this.apiClient);
       } catch {
+        this.connectInFlight = false;
         this.scheduleReconnect(true);
         return;
       }
     }
     const ws = new WebSocket(eventWsUrl(this.eventId, ticket));
     this.ws = ws;
-    ws.addEventListener("open", () => this.onOpen());
-    ws.addEventListener("message", (e) => this.onMessage(e));
-    ws.addEventListener("close", (e) => this.onClose(e));
+    this.connectInFlight = false;
+    // 破棄済み ws のイベントを無視するため、現行 ws と一致する場合のみ処理する。
+    ws.addEventListener("open", () => {
+      if (this.ws === ws) this.onOpen();
+    });
+    ws.addEventListener("message", (e) => {
+      if (this.ws === ws) this.onMessage(e);
+    });
+    ws.addEventListener("close", (e) => {
+      if (this.ws === ws) this.onClose(e);
+    });
+    // ハンドシェイクが寡黙にハングすると onClose が来ず、readyState ガードにより
+    // online/visibility 経由の connect() も素通りして再接続不能になるため打ち切る。
+    this.connectTimer = setTimeout(() => {
+      this.connectTimer = null;
+      if (this.ws === ws && ws.readyState === WebSocket.CONNECTING) {
+        ws.close(4002, "connect-timeout"); // close イベント経由で scheduleReconnect に乗る
+      }
+    }, CONNECT_TIMEOUT_MS);
+  }
+
+  private clearConnectTimer(): void {
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    this.connectTimer = null;
   }
 
   private onOpen(): void {
+    this.clearConnectTimer();
     this.attempt = 0;
     this.setState("connected");
     this.startHeartbeat();
@@ -88,13 +133,25 @@ export class LiveSocket {
       this.notePong();
       return;
     }
-    let msg: LiveMessage;
+    let raw: unknown;
     try {
-      msg = JSON.parse(e.data as string) as LiveMessage;
+      raw = JSON.parse(e.data as string);
     } catch {
       return;
     }
-    if (typeof (msg as { kind?: string }).kind !== "string") return;
+    const parsed = LiveMessage.safeParse(raw);
+    if (!parsed.success) {
+      // 未知 kind は前方互換のため黙って無視する（version が飛べば既存の gap 検出が
+      // resync する）。既知 kind の形状不正のみ full 再取得で即回復する。
+      const kind =
+        typeof raw === "object" && raw !== null && "kind" in raw
+          ? (raw as { kind: unknown }).kind
+          : undefined;
+      if (typeof kind === "string" && !KNOWN_KINDS.has(kind)) return;
+      void this.resync();
+      return;
+    }
+    const msg = parsed.data;
     // M3: serverNowMs を持つのは snapshot / timer のみ。counter は持たない。
     if (msg.kind === "snapshot" || msg.kind === "timer") {
       this.clock.sync(msg.serverNowMs);
@@ -126,10 +183,12 @@ export class LiveSocket {
   }
 
   private startHeartbeat(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = setInterval(() => {
       if (this.ws?.readyState !== WebSocket.OPEN) return;
       this.ws.send("ping");
-      this.pongTimer = setTimeout(
+      // pong 待ちを多重に積まない（未応答のまま次の ping が来ても timer は1本）。
+      this.pongTimer ??= setTimeout(
         () => this.ws?.close(4000, "pong-timeout"),
         PONG_TIMEOUT_MS,
       );
@@ -179,6 +238,19 @@ export class LiveSocket {
       this.stateListeners.forEach((l) => l(s));
     }
   }
+  /** 現行 ws を手放す。以降この ws のイベントは connect 時のガードで無視される。 */
+  private disposeWs(code: number, reason: string): void {
+    const ws = this.ws;
+    if (!ws) return;
+    this.ws = null;
+    if (
+      ws.readyState === WebSocket.CONNECTING ||
+      ws.readyState === WebSocket.OPEN
+    ) {
+      ws.close(code, reason);
+    }
+  }
+
   private clearTimers(): void {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     if (this.pongTimer) clearTimeout(this.pongTimer);
@@ -186,5 +258,6 @@ export class LiveSocket {
     this.heartbeatTimer = null;
     this.pongTimer = null;
     this.reconnectTimer = null;
+    this.clearConnectTimer();
   }
 }

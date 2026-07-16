@@ -18,7 +18,7 @@ const ownerScoped = new Hono<MemberEnv>()
   .use(requireEventMember("owner"))
   .delete("/", async (c) => {
     const db = createDb(c.env.DB);
-    await eventsRepo.archiveEvent(db, c.req.param("eventId")!);
+    await eventsRepo.archiveEvent(db, c.var.eventId);
     return c.json({ ok: true } as const);
   });
 
@@ -27,7 +27,7 @@ const eventScoped = new Hono<MemberEnv>()
   .use(requireEventMember("manager"))
   .get("/", async (c) => {
     const db = createDb(c.env.DB);
-    const detail = await eventsRepo.getEventDetail(db, c.req.param("eventId")!);
+    const detail = await eventsRepo.getEventDetail(db, c.var.eventId);
     if (!detail) throw new DomainError("NOT_FOUND", "event not found");
     return c.json({
       event: serializeRow(detail.event),
@@ -41,7 +41,7 @@ const eventScoped = new Hono<MemberEnv>()
     const db = createDb(c.env.DB);
     const updated = await eventsRepo.patchEvent(
       db,
-      c.req.param("eventId")!,
+      c.var.eventId,
       c.req.valid("json"),
     );
     if (!updated) throw new DomainError("NOT_FOUND", "event not found");

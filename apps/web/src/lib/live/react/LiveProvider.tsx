@@ -1,6 +1,13 @@
 import type { FullSnapshot } from "@app/shared";
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, type ReactNode, useContext, useEffect, useMemo } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { ApiClient } from "../../api-client";
 import { unwrap } from "../../api-error";
 import { qk } from "../../query";
@@ -36,7 +43,7 @@ export function LiveProvider({
   children: ReactNode;
 }) {
   const qc = useQueryClient();
-  const value = useMemo<LiveContextValue>(() => {
+  const base = useMemo(() => {
     const initial = qc.getQueryData<FullSnapshot>(qk.eventLive(eventId));
     const store = new LiveStore(
       initial ?? {
@@ -51,11 +58,14 @@ export function LiveProvider({
     const clock = new ServerClock();
     if (initial) clock.sync(initial.serverNowMs);
     const pending = new PendingQueue();
-    return { store, socket: null, clock, pending };
+    return { store, clock, pending };
   }, [eventId, qc]);
 
+  // socket は state に載せ、接続の生成/破棄で context 参照を変えて消費者へ伝播させる。
+  const [socket, setSocket] = useState<LiveSocket | null>(null);
+
   useEffect(() => {
-    const { store, clock } = value;
+    const { store, clock } = base;
     const resync = async () => {
       const fresh = await qc.fetchQuery({
         queryKey: qk.eventLive(eventId),
@@ -70,14 +80,19 @@ export function LiveProvider({
       clock.sync(fresh.serverNowMs);
       store.applySnapshot(fresh);
     };
-    const socket = new LiveSocket(eventId, store, clock, resync, apiClient);
-    value.socket = socket;
-    socket.start();
+    const next = new LiveSocket(eventId, store, clock, resync, apiClient);
+    setSocket(next);
+    next.start();
     return () => {
-      socket.stop();
-      value.socket = null;
+      next.stop();
+      setSocket((cur) => (cur === next ? null : cur));
     };
-  }, [value, eventId, qc, apiClient]);
+  }, [base, eventId, qc, apiClient]);
+
+  const value = useMemo<LiveContextValue>(
+    () => ({ ...base, socket }),
+    [base, socket],
+  );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

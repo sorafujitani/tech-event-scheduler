@@ -1,5 +1,4 @@
 import { Box } from "@yamada-ui/react/components/box";
-import { VStack } from "@yamada-ui/react/components/stack";
 import type { ReactNode } from "react";
 
 export function PageContainer(props: {

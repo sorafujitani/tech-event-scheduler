@@ -1,4 +1,4 @@
-import type { TimerSnapshot } from "@app/shared";
+import type { ScheduleItemStatus, TimerSnapshot } from "@app/shared";
 
 /** 不正な状態遷移。DO が CONFLICT に変換する。 */
 export class IllegalTransition extends Error {
@@ -13,6 +13,70 @@ export type RoomTimer = TimerSnapshot & {
   track: string;
   overrunNotified: boolean;
 };
+
+/** RoomTimer の再構成に必要な D1 schedule_item 列。 */
+export interface TimerRow {
+  id: string;
+  plannedDurationSec: number;
+  track: string;
+  status: ScheduleItemStatus;
+  actualStartedAtMs: number | null;
+  accumulatedPauseMs: number;
+  pausedAtMs: number | null;
+  endedAtMs: number | null;
+}
+
+/**
+ * D1 行から RoomTimer を status ごとに検証して構築する。D1 は write-through で
+ * 不変条件を維持しているはずだが、破れた行はキャストで通さず null を返す（呼び側で観測して skip）。
+ */
+export function roomTimerFromRow(row: TimerRow): RoomTimer | null {
+  const base = {
+    id: row.id,
+    plannedDurationSec: row.plannedDurationSec,
+    accumulatedPauseMs: row.accumulatedPauseMs,
+    track: row.track,
+    overrunNotified: false,
+  };
+  switch (row.status) {
+    case "scheduled":
+      return {
+        ...base,
+        status: "scheduled",
+        actualStartedAtMs: null,
+        pausedAtMs: null,
+        endedAtMs: null,
+      };
+    case "running":
+      if (row.actualStartedAtMs == null) return null;
+      return {
+        ...base,
+        status: "running",
+        actualStartedAtMs: row.actualStartedAtMs,
+        pausedAtMs: null,
+        endedAtMs: null,
+      };
+    case "paused":
+      if (row.actualStartedAtMs == null || row.pausedAtMs == null) return null;
+      return {
+        ...base,
+        status: "paused",
+        actualStartedAtMs: row.actualStartedAtMs,
+        pausedAtMs: row.pausedAtMs,
+        endedAtMs: null,
+      };
+    case "done":
+    case "skipped":
+      if (row.actualStartedAtMs == null || row.endedAtMs == null) return null;
+      return {
+        ...base,
+        status: row.status,
+        actualStartedAtMs: row.actualStartedAtMs,
+        pausedAtMs: null,
+        endedAtMs: row.endedAtMs,
+      };
+  }
+}
 
 export function start(t: RoomTimer, nowMs: number): RoomTimer {
   if (t.status !== "scheduled")

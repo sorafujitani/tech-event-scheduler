@@ -9,7 +9,7 @@ import type { MemberEnv } from "../middleware/types";
 // eventScoped 配下に "/" でマウントされ requireEventMember("manager") 済み。
 export const liveRoutes = new Hono<MemberEnv>()
   .get("/live", async (c) => {
-    const r = await callRoom(c.env, c.req.param("eventId")!, {
+    const r = await callRoom(c.env, c.var.eventId, {
       type: "snapshot.get",
     });
     if (r.type !== "snapshot")
@@ -18,7 +18,7 @@ export const liveRoutes = new Hono<MemberEnv>()
   })
   .post("/ws-ticket", async (c) => {
     const ticket = await issueWsTicket(c.env, {
-      eventId: c.req.param("eventId")!,
+      eventId: c.var.eventId,
       userId: c.var.member.userId,
       role: c.var.member.role,
     });
@@ -28,7 +28,7 @@ export const liveRoutes = new Hono<MemberEnv>()
     if (c.req.header("Upgrade") !== "websocket") {
       throw new DomainError("BAD_REQUEST", "expected websocket");
     }
-    const eventId = c.req.param("eventId")!;
+    const eventId = c.var.eventId;
     const stub = eventRoomStub(c.env, eventId);
     const u = new URL(c.req.url);
     // C1: 元 URL の search(?ticket=) を内部 URL に保持し、ticket を x-ws-ticket ヘッダへ移送して DO へ。

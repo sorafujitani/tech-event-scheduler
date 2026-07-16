@@ -1,14 +1,7 @@
-import type { ModuleSnapshot, ModuleType } from "@app/shared";
+import type { ModuleType } from "@app/shared";
 import type { FC, ReactNode } from "react";
 
-export type ModuleSnapshotOf<T extends ModuleType> = Extract<
-  ModuleSnapshot,
-  { moduleType: T }
->;
-export type ModuleLiveCardProps = {
-  eventId: string;
-  snapshot: ModuleSnapshot | undefined;
-};
+export type ModuleLiveCardProps = { eventId: string };
 export type ModulePageProps = { eventId: string };
 
 export type EventModule = {

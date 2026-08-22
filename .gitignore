@@ -130,7 +130,7 @@ dist
 result
 result-*
 
-# terraform
+# infrastructure state (never commit)
 .terraform/
 *.tfstate
 *.tfstate.*

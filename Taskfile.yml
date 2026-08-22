@@ -26,12 +26,15 @@ tasks:
     cmd: bun x oxlint .
 
   fmt:
-    desc: "Format via oxfmt (falls back to oxlint --fix until oxfmt CLI is finalized)"
+    desc: "Format via oxfmt (falls back to oxlint --fix
+      until oxfmt CLI is finalized)"
     cmd: bun x oxlint --fix .
 
   typecheck:
-    desc: "Typecheck all workspaces (tsgo --noEmit per package, orchestrated by turbo)"
-    cmd: bun x turbo typecheck
+    desc: "Typecheck all workspaces and operational scripts"
+    cmds:
+      - bun x turbo typecheck
+      - bun x tsgo --noEmit -p scripts/tsconfig.json
 
   test:
     desc: "Run tests via vitest"
@@ -52,30 +55,63 @@ tasks:
     dir: apps/api
     cmd: bun x wrangler d1 migrations apply DB --remote
 
-  infra:init:
-    desc: "Initialize Terraform (downloads providers). terraform is provided by mise (mise.toml)."
-    dir: infra/terraform/prod
-    cmd: terraform init
+  cloudflare:check:
+    desc: "Read-only verification of D1, Worker secrets,
+      and deployed Worker versions"
+    cmds:
+      - bun run scripts/cloudflare-infra.ts check
+      - task: db:migrations:prod:status
 
-  infra:plan:
-    dir: infra/terraform/prod
-    cmd: terraform plan
+  secrets:sync:
+    desc: "Push required api secrets from apps/api/.env to Worker Secrets"
+    cmd: bun run scripts/cloudflare-secrets.ts sync
 
-  infra:apply:
-    dir: infra/terraform/prod
-    cmd: terraform apply
+  secrets:list:
+    desc: "List registered Worker Secrets and check required ones exist"
+    cmd: bun run scripts/cloudflare-secrets.ts list
+
+  cloudflare:bootstrap:
+    desc: "Create the D1 database only when config has a placeholder
+      id and no same-name DB exists"
+    cmd: bun run scripts/cloudflare-infra.ts bootstrap
+
+  db:migrations:prod:status:
+    desc: "List unapplied production D1 migrations
+      without changing the database"
+    dir: apps/api
+    cmd: bun x wrangler d1 migrations list DB --remote
 
   deploy:web:
     dir: apps/web
     cmd: bun x wrangler deploy
 
   deploy:api:
-    desc: "Deploy api Worker (refuses while wrangler.jsonc has placeholder D1 id)"
+    desc: "Deploy api Worker after verifying that a real D1 id is configured"
     dir: apps/api
     preconditions:
       - sh: '! grep -q "00000000-0000-0000-0000-000000000000" wrangler.jsonc'
-        msg: "apps/api/wrangler.jsonc still contains the placeholder D1 database_id. Replace it with the real id before deploy."
+        msg: "apps/api/wrangler.jsonc still contains the placeholder D1
+          database_id. Replace it with the real id before deploy."
     cmd: bun x wrangler deploy
+
+  deploy:prod:
+    desc: "Apply D1 migrations, deploy API and Web Workers,
+      then verify public endpoints"
+    cmds:
+      - task: cloudflare:check
+      - task: db:migrate:prod
+      - task: deploy:api
+      - task: deploy:web
+      - task: deploy:verify
+
+  deploy:verify:
+    desc: "Verify the production API health endpoint and Web login page"
+    cmds:
+      - curl --fail --silent --show-error
+        https://tech-event-scheduler-api.fujitanisora0414.workers.dev
+        /api/health | jq -e '.status == "ok"'
+      - curl --fail --silent --show-error --location --output /dev/null
+        https://tech-event-scheduler-web.fujitanisora0414.workers.dev/
 
   ci:
     desc: "CI entry point: lint, typecheck, test, build"

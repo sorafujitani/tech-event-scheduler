@@ -27,6 +27,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@v30
@@ -49,6 +51,9 @@ jobs:
       - name: Install dependencies
         run: nix develop -c bun install --frozen-lockfile
 
+      - name: Verify Cloudflare resources
+        run: nix develop -c task cloudflare:check
+
       - name: Apply D1 migrations to prod
         run: nix develop -c task db:migrate:prod
 
@@ -61,6 +66,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@v30
@@ -84,8 +91,6 @@ jobs:
         run: nix develop -c bun install --frozen-lockfile
 
       - name: Deploy api Worker
-        # task deploy:api enforces the placeholder-D1-id precondition;
-        # this job will fail until apps/api/wrangler.jsonc has the real id.
         run: nix develop -c task deploy:api
 
   deploy-web:
@@ -97,6 +102,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@v30
@@ -121,3 +128,20 @@ jobs:
 
       - name: Deploy web Worker
         run: nix develop -c task deploy:web
+
+  verify:
+    needs: [deploy-api, deploy-web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Verify production endpoints
+        run: |
+          curl --fail --silent --show-error \
+            https://tech-event-scheduler-api.fujitanisora0414.workers.dev/api/health \
+            | jq -e '.status == "ok"'
+          curl --fail --silent --show-error --location --output /dev/null \
+            https://tech-event-scheduler-web.fujitanisora0414.workers.dev/

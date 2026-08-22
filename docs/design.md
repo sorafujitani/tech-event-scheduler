@@ -6,7 +6,7 @@
 > - **AppType の共有経路**: `AppType` は `apps/api/src/index.ts` の単一 `app` インスタンスで `export type AppType = typeof app` され、`apps/api/src/types.ts` が `export type { AppType } from "./index"` で再エクスポートする。`@app/api` の `package.json` exports は `./types` のみ公開。Web は `import type { AppType } from "@app/api/types"` で受ける（`apps/web/src/lib/api-client.ts` で実確認）。**この間接層を必ず経由する。**
 > - **requireSession は実在する**: `apps/api/src/middleware/auth.ts` に `requireSession` が既に実装済み。`getAuth(c.env).api.getSession({ headers: c.req.raw.headers })` を呼び、`c.var.user`/`c.var.session`（型は better-auth の `getSession` 戻り値由来）をセット、未認証は 401。**新規実装ではなく再利用する。**
 > - **Web は TanStack Start の SSR Worker**。API へは service binding 経由の intra-Worker fetch（`api-client.ts` の `options.fetch` に `env.API.fetch.bind(env.API)`）。ブラウザからは prod=api Worker オリジン直叩き / dev=vite proxy（`/api` → `localhost:8788`）。cookie はクロスサブドメイン（`sameSite:"none"`, `crossSubDomainCookies`、`auth.ts` で実確認）。
-> - **wrangler.jsonc**: `compatibility_date 2026-05-01` + `nodejs_compat` のみ。`durable_objects`/`migrations` セクションは無し。`d1_databases[0].database_id` は placeholder（`00000000-...`）で、コメント通り deploy task が拒否する。
+> - **wrangler.jsonc**: `compatibility_date 2026-05-01` + `nodejs_compat`、D1、`EVENT_ROOM` Durable Object と `v1` migration を定義済み。`d1_databases[0].database_id` は本番D1のUUIDで、`task cloudflare:check` が認証先アカウントの実リソースと照合する。
 > - **db**: `packages/db/src/schema/{auth.ts,index.ts}`、`zod.ts`（drizzle-zod select/insert）、`client.ts`（`createDb(d1)` → `drizzle(d1,{schema})`）。exports は `.`/`./schema`/`./zod`。`migrations_dir` は `../../packages/db/migrations`（wrangler 側に設定済み）。
 > - **`@app/shared`**: `Temporal` ベースのシリアライザ（`InstantString`/`dateToInstant` 等）が既にある。enum 定数・タイマー純関数・`LiveMessage` はここに追記する。
 
@@ -561,7 +561,7 @@ export { EventRoom } from "./durable/event-room"; // ★ DO クラスを main �
 - PATCH（owner→manager 降格）も同型の条件付き UPDATE（`role='manager'` への変更を、owner が2人以上ある時のみ許可）にする。
 - 将来さらに厳密化が必要なら、メンバー変更も `EventRoom` DO 経由に寄せて直列化する余地を残す。
 
-### 4.6 wrangler / DO 同居・D1 placeholder（着手前提）
+### 4.6 wrangler / DO 同居・D1管理
 
 レビュー major 反映。
 
@@ -575,7 +575,7 @@ export { EventRoom } from "./durable/event-room"; // ★ DO クラスを main �
     { "tag": "v1", "new_sqlite_classes": ["EventRoom"] }  // storage は SQLite-backed
   ]
   ```
-- **D1 placeholder 解決を DO 着手の前提タスク化**: `wrangler d1 create tech-event-scheduler` の出力 UUID で `d1_databases[0].database_id` を差し替える（現状 `00000000-...` で deploy task が拒否）。§8 の順序に組み込む。
+- **D1の実リソース照合**: 本番D1 `tech-event-scheduler` のUUIDを `d1_databases[0].database_id` に固定し、変更前とデプロイ前に `task cloudflare:check` で認証先アカウントの同名D1・UUID・Worker Secrets・Worker versions・未適用migrationをread-only確認する。新規環境だけ `task cloudflare:bootstrap` を使い、既存D1は自動削除しない。
 
 ---
 
@@ -744,7 +744,7 @@ export const moduleRegistry: EventModule[] = [/* timetable, attendance, ... */];
 
 ## 8. 実装着手順序
 
-0. **前提タスク（DO 着手前に必須）**: `wrangler d1 create tech-event-scheduler` → 出力 UUID で `apps/api/wrangler.jsonc` の `database_id` placeholder（`00000000-...`）を差し替え（現状 deploy task が拒否）。
+0. **Cloudflare前提確認**: `task cloudflare:check` で `apps/api/wrangler.jsonc` のD1 UUIDと認証先アカウントの実D1、Worker Secrets、API/Web Worker versions、未適用migrationを照合する。新規環境のD1作成だけ `task cloudflare:bootstrap` を使う。
 1. **DB スキーマ**: `packages/db/src/schema/{event,schedule,attendance,module}.ts` 追加 → `schema/index.ts` で re-export（既存 auth に追記）→ `zod.ts` に drizzle-zod 追記。
 2. **共有層**: `@app/shared` に enum 配列定数・`TimerSnapshot`（discriminated union）・`elapsedMs`/`remainingMs`（クランプ付き純関数）・`LiveMessage`・`ModuleSnapshot`/`FullSnapshot`・列名サフィックス分岐シリアライザを追加。
 3. **マイグレーション**: `drizzle-kit generate` → `packages/db/migrations` へ出力 → `wrangler d1 migrations apply`（`migrations_dir` 設定済み）。

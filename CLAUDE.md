@@ -1,22 +1,33 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Repository Status
 
-This repository is currently a bare scaffold — only `README.md` (title only), `LICENSE`, and `.gitignore` are committed. There is no source code, no package manifest, and no build/test tooling configured yet. When you are asked to add code, confirm the intended stack with the user before scaffolding, since the choice is not yet locked in.
+This is an implemented Bun/TypeScript monorepo for a tech-event operations
+web app. It contains a Hono API Worker, a TanStack Start Web Worker, Cloudflare
+D1, and one EventRoom Durable Object per event.
 
-## Inferred Stack (from `.gitignore` only — not yet authoritative)
+## Development Rules
 
-The `.gitignore` is Node-flavored and contains a few hints worth respecting once code lands:
+- Use Bun workspaces and the tasks in `Taskfile.yml`.
+- Run `task ci` before handing off code changes.
+- Keep secrets in `apps/api/.env` locally and in Cloudflare Worker Secrets in
+  production. Never commit real secret values.
+- Preserve unrelated working-tree changes.
+- Treat `apps/api/wrangler.jsonc` and `apps/web/wrangler.jsonc` as the source of
+  truth for Cloudflare application resources and bindings.
+- Use `task cloudflare:check` for read-only production inventory verification.
+- Never automate D1 deletion. `task cloudflare:bootstrap` may create D1 only
+  when the config contains the explicit placeholder ID and no same-name D1
+  exists in the authenticated account.
+- Apply D1 migrations before deploying either Worker.
 
-- Node.js / Bun runtime is anticipated. Both `node_modules/` and `node_modules.bun` are ignored, and there is a `# bun deploy file` comment block, so prefer Bun-compatible code unless the user says otherwise.
-- SQLite is anticipated as the data store (`*.sqlite` is ignored). Database files should never be committed.
-- TypeScript build artifacts (`*.tsbuildinfo`, `dist/`) and Next.js / Nuxt.js / Gatsby outputs are pre-ignored, but no framework has actually been chosen.
-- `.env` and `.env.test` are ignored — keep secrets out of the repo.
+## Cloudflare Ownership
 
-Treat these as defaults to maintain, not as decisions that have been made.
+- Wrangler config: Workers, bindings, Durable Object migrations, public vars,
+  assets, service bindings, and future custom domains.
+- Drizzle SQL migrations: D1 schema history.
+- Wrangler Worker Secrets: Google OAuth and Better Auth secrets.
+- GitHub Actions Secrets: CI-only Cloudflare API token and account ID.
 
-## Project Intent
-
-The repository name (`tech-event-scheduler`) is the only signal of purpose currently in-tree. Do not invent product requirements; ask the user when scope is unclear.
+Do not add Terraform/OpenTofu or a second infrastructure state system without
+an explicit architecture decision.

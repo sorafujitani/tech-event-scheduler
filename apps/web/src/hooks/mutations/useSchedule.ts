@@ -10,6 +10,15 @@ type CreateItemInput = {
   kind?: ScheduleItemKind;
 };
 
+type PatchItemInput = {
+  itemId: string;
+  patch: {
+    title?: string;
+    plannedDurationSec?: number;
+    kind?: ScheduleItemKind;
+  };
+};
+
 // A(定義系): schedule_item は event 詳細に含まれるため qk.event を invalidate。
 export const useSchedule = (eventId: string) => {
   const qc = useQueryClient();
@@ -27,6 +36,17 @@ export const useSchedule = (eventId: string) => {
     onSettled: invalidate,
   });
 
+  const update = useMutation({
+    mutationFn: async ({ itemId, patch }: PatchItemInput) =>
+      unwrap(
+        await api().api.events[":eventId"].schedule[":itemId"].$patch({
+          param: { eventId, itemId },
+          json: patch,
+        }),
+      ),
+    onSettled: invalidate,
+  });
+
   const remove = useMutation({
     mutationFn: async (itemId: string) =>
       unwrap(
@@ -37,5 +57,18 @@ export const useSchedule = (eventId: string) => {
     onSettled: invalidate,
   });
 
-  return { create, remove };
+  const reorder = useMutation({
+    mutationFn: async (orderedItemIds: string[]) =>
+      unwrap(
+        await api().api.events[":eventId"].schedule.reorder.$post({
+          param: { eventId },
+          json: { orderedItemIds },
+        }),
+      ),
+    onSettled: invalidate,
+  });
+
+  return { create, update, remove, reorder };
 };
+
+export type UseSchedule = ReturnType<typeof useSchedule>;

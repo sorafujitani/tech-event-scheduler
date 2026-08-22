@@ -51,28 +51,3 @@ jobs:
 
       - name: Run CI tasks (lint / typecheck / test / build)
         run: nix develop -c task ci
-
-  terraform-validate:
-    name: terraform validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install mise
-        uses: jdx/mise-action@v2
-        with:
-          version: 2026.3.13
-          install: true
-
-      - name: terraform init -backend=false
-        working-directory: infra/terraform/prod
-        run: terraform init -backend=false
-
-      - name: terraform validate
-        working-directory: infra/terraform/prod
-        run: terraform validate
-
-      - name: terraform fmt check
-        working-directory: infra/terraform/prod
-        run: terraform fmt -check -diff

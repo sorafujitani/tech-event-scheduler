@@ -982,12 +982,12 @@ DO の error 応答は **`code` 由来の HTTP status を返す**（`statusForCo
 
 ### 6.3 CI（既存 ci.yml = Nix+Bun+Taskfile+Turbo 踏襲）
 
-`task ci`（lint→typecheck→test→build）を維持。PR は `task ci:affected`（`turbo lint typecheck test build --affected`、`TURBO_SCM_BASE` に base sha、`actions/checkout fetch-depth:0`）。turbo の `dependsOn`（`^build`）が層順序（shared→db→api/web）を保証し、`@app/shared` 変更時（enum/ErrorCode/LiveMessage）は下流の test まで巻き込む。main push はフル `task ci`。`terraform-validate` ジョブは既存維持。
+`task ci`（lint→typecheck→test→build）を維持。PR は `task ci:affected`（`turbo lint typecheck test build --affected`、`TURBO_SCM_BASE` に base sha、`actions/checkout fetch-depth:0`）。turbo の `dependsOn`（`^build`）が層順序（shared→db→api/web）を保証し、`@app/shared` 変更時（enum/ErrorCode/LiveMessage）は下流の test まで巻き込む。main push はフル `task ci`。Cloudflareの実リソース照合は本番deploy workflowの `task cloudflare:check` で行う。
 
 ### 6.4 運用 / デプロイ（既存 deploy.yml = workflow_run 連鎖踏襲）
 
-順序 `ci → guard → migrate(D1) → {deploy-api, deploy-web}` 維持。追加項目:
-- **前提タスク**: `wrangler d1 create tech-event-scheduler` 出力 UUID で `database_id` placeholder（`00000000-...`）を差し替え（deploy task が placeholder を拒否、`guard:placeholder` で CI も弾く）。
+順序 `ci → guard → cloudflare:check → migrate(D1) → {deploy-api, deploy-web} → verify` を維持。追加項目:
+- **実リソース照合**: `task cloudflare:check` でD1名/UUID、API Worker Secrets、API/Web Worker versions、未適用migrationをread-only確認する。新規環境のD1作成だけ `task cloudflare:bootstrap` を使い、既存D1は自動削除しない。
 - **DO migration tag**: クラス追加/リネーム/削除は必ず新 tag を追記（既存 tag を編集しない）。`new_sqlite_classes`/`renamed_classes`/`deleted_classes`。
 - **secret**: `EnvSchema` の `GOOGLE_*`/`BETTER_AUTH_*` は `wrangler secret put`。`WS_TICKET_SECRET` を導入する場合も同様（`validateEnv` で fail-fast）。`WEB_ORIGIN`/`COOKIE_DOMAIN` は vars 平文。
 - **migration 順序**: `migrate`（D1）→ `deploy-api`（needs）。列追加は nullable/default 付きの前向き migration。
@@ -1004,7 +1004,7 @@ design.md §5.3 の `clientSkew = clientNow - serverNowMs`（端末時計差を�
 
 design.md §8 を本書の粒度で具体化（依存順）。
 
-0. **前提**: `wrangler d1 create` → `database_id` placeholder 差し替え。
+0. **前提**: `task cloudflare:check` で設定とCloudflare実リソースを照合する。新規環境だけ `task cloudflare:bootstrap` でD1を作成する。
 1. **`@app/shared`**: enum 値配列 + zod enum + `TimerSnapshot` union + `elapsedMs`/`remainingMs`/`isOverrun`（クランプ） + `LiveMessage`/`ModuleSnapshot`/`FullSnapshot` + **`ErrorCode`/`ErrorBody`（単一ソース）** + `Serialized<T>`/`serializeRow`。→ L1 着手可。
 2. **`packages/db`**: `schema/{event,schedule,attendance,module}.ts`（`event_member_event_user_status_idx` 含む） → `schema/index.ts` 追記 → `zod.ts` 追記（`client.ts` 無改修）。
 3. **migration**: `drizzle-kit generate` → 生成 SQL レビュー → `wrangler d1 migrations apply --local`。

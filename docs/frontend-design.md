@@ -1360,7 +1360,7 @@ export default defineConfig({
 
 ## 8. フロントエンド実装着手順序
 
-design §8 の全体順序（0:D1 placeholder → 1:DB → 2:shared → … → 7:DO → 8:Live REST+WS）に対し、Web（§8-9〜11）を以下に分解。**§8-2（`@app/shared` の `TimerSnapshot`/`FullSnapshot`/`LiveMessage`/`ModuleSnapshot`/`ErrorBody`/`ErrorCode`/`elapsedMs`/`remainingMs`）と §8-6/8（REST/Live エンドポイント・timer の `/schedule/:itemId/timer/*` マウント・write 系の `zValidator("header")`）が前提**。
+design §8 の全体順序（0:Cloudflare実リソース照合 → 1:DB → 2:shared → … → 7:DO → 8:Live REST+WS）に対し、Web（§8-9〜11）を以下に分解。**§8-2（`@app/shared` の `TimerSnapshot`/`FullSnapshot`/`LiveMessage`/`ModuleSnapshot`/`ErrorBody`/`ErrorCode`/`elapsedMs`/`remainingMs`）と §8-6/8（REST/Live エンドポイント・timer の `/schedule/:itemId/timer/*` マウント・write 系の `zValidator("header")`）が前提**。
 
 1. **ブロッカー潰し（最優先）**: `vite.config.ts` の `/api` proxy に **`ws: true` 追加（M6）**。`@tanstack/react-query`・QR ライブラリ（deps）、testing-library 系・msw・jsdom（devDeps）を install。`@app/shared` に `ErrorBody`/`ErrorCode` 追記を BE と同時に確定（M2）。
 2. **基盤層**: `lib/env.ts`（origin 集約・`eventWsUrl` の `?ticket=`）→ `api-client.ts`（env.ts 参照・`$fetch`・`idempotencyHeader`・`writeRpc`・singleton）/`auth-client.ts` 改修 → `lib/api-error.ts`（共有 `ErrorCode`）・`lib/api-types.ts`（**timer RPC 型 C2 + m3 アサーション**）・`lib/query.ts`・`lib/theme.ts`。
